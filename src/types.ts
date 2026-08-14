@@ -294,9 +294,13 @@ export interface DragonTigerSeat {
     netAmount: number;
   }[];
   seatName?: string;
+  rawDeptName?: string;
+  hotMoneyTag?: string; // 游资/机构代表人物标签，如 "章盟主", "葛卫东", "方新侠", "呼家楼", "公募/险资机构"
   seatType?: 'institution' | 'hot_money' | 'northbound' | string;
+  totalBuy?: number;
   netBuyTotal?: number;
   winRate30d?: number; // 30天胜率
+  description?: string;
   stocksTraded?: {
     code: string;
     name: string;
@@ -305,6 +309,7 @@ export interface DragonTigerSeat {
     netAmount: number;
     consecutiveBoards: number;
     boardText: string;
+    changePercent?: number;
   }[];
 }
 

@@ -20,6 +20,11 @@ import {
   ExternalLink,
   ChevronRight,
   Filter,
+  UserCheck,
+  Building2,
+  Globe2,
+  TrendingDown,
+  Info,
 } from 'lucide-react';
 
 interface LimitUpBoardProps {
@@ -38,15 +43,16 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
   // Filters
-  const [selectedBoards, setSelectedBoards] = useState<number>(0); // 0 = all, 4 = >=4, 3 = 3, 2 = 2, 1 = 1
+  const [selectedBoards, setSelectedBoards] = useState<number>(0); // 0 = all, 99 = >=2, 4 = >=4, 3 = 3, 2 = 2, 1 = 1
   const [selectedSector, setSelectedSector] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dragonTigerFilter, setDragonTigerFilter] = useState<'all' | 'institution' | 'hot_money' | 'northbound'>('all');
 
   // Auto refresh timer
   const [autoRefreshCountdown, setAutoRefreshCountdown] = useState<number>(30);
 
   const fetchLimitUpData = async (showLoading = true) => {
-    if (showLoading) setIsLoading(true);
+    if (showLoading && stocks.length === 0) setIsLoading(true);
     try {
       const resp = await fetch('/api/limit-up-board');
       if (resp.ok) {
@@ -66,7 +72,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
     } catch (err) {
       console.error('Failed to fetch limit-up data:', err);
     } finally {
-      if (showLoading) setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -126,6 +132,26 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
       }));
   }, [sectors]);
 
+  // Filtered Dragon Tiger list
+  const filteredDragonTiger = useMemo(() => {
+    return dragonTiger.filter((seat) => {
+      if (dragonTigerFilter !== 'all' && seat.seatType !== dragonTigerFilter) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchName = (seat.seatName || '').toLowerCase().includes(q);
+        const matchDept = (seat.rawDeptName || '').toLowerCase().includes(q);
+        const matchTag = (seat.hotMoneyTag || '').toLowerCase().includes(q);
+        const matchStock = (seat.stocksTraded || []).some(
+          (stk) => stk.name.toLowerCase().includes(q) || stk.code.includes(q)
+        );
+        if (!matchName && !matchDept && !matchTag && !matchStock) return false;
+      }
+      return true;
+    });
+  }, [dragonTiger, dragonTigerFilter, searchQuery]);
+
   // Group stocks by consecutive board count for Ladder view
   const ladderGroups = useMemo(() => {
     const map = new Map<number, LimitUpStock[]>();
@@ -149,13 +175,15 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
   // Helper formatting numbers in Chinese financial style
   const formatMoney = (num: number) => {
     if (!num) return '0';
-    if (num >= 100000000) {
-      return `${(num / 100000000).toFixed(2)}亿`;
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    if (abs >= 100000000) {
+      return `${sign}${(abs / 100000000).toFixed(2)}亿`;
     }
-    if (num >= 10000) {
-      return `${(num / 10000).toFixed(0)}万`;
+    if (abs >= 10000) {
+      return `${sign}${(abs / 10000).toFixed(0)}万`;
     }
-    return num.toLocaleString();
+    return `${sign}${abs.toLocaleString()}`;
   };
 
   const getBoardBadgeColor = (boards: number) => {
@@ -194,18 +222,18 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                     短线连板龙虎榜
                   </h2>
                   <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-medium">
-                    A股连板天梯 & 题材主线
+                    A股连板天梯 · 主线题材 · 机构游资席位
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  全市场连板高度梯队 · 核心题材主线板块 · 机构游资席位动向
+                  连板高度天梯梯队 · 核心题材主线板块 · 顶级游资与机构真实上榜画像
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5 bg-[#070a0e] px-3 py-1.5 rounded border border-[#1e293b]">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-amber-400 animate-spin' : 'bg-emerald-500 animate-pulse'}`}></span>
                 <span>更新时间: {lastUpdated || '加载中...'}</span>
                 <span className="text-slate-600">|</span>
                 <span className="text-slate-400">
@@ -217,7 +245,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                 disabled={isLoading}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1e293b] hover:bg-[#283548] text-slate-200 text-xs font-medium transition cursor-pointer border border-slate-700/60"
               >
-                <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                <RotateCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-amber-400' : ''}`} />
                 <span>手动刷新</span>
               </button>
             </div>
@@ -250,41 +278,43 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
             {/* 2. 封板率 */}
             <div className="bg-[#121824] rounded-lg p-3 border border-[#232f42]">
               <div className="text-xs text-slate-400 mb-1 flex items-center justify-between">
-                <span>封板成功率</span>
-                <ShieldAlert className="w-3.5 h-3.5 text-emerald-400" />
-              </div>
-              <div className="text-lg font-bold font-mono text-emerald-400">
-                {summary?.sealSuccessRate || 86.0}%
-              </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                炸板: {summary?.brokenCount || 7} 家
-              </div>
-            </div>
-
-            {/* 3. 涨停家数 */}
-            <div className="bg-[#121824] rounded-lg p-3 border border-[#232f42]">
-              <div className="text-xs text-slate-400 mb-1 flex items-center justify-between">
-                <span>涨停总数</span>
+                <span>涨停封板率</span>
                 <TrendingUp className="w-3.5 h-3.5 text-red-400" />
               </div>
               <div className="text-lg font-bold font-mono text-red-400">
-                {summary?.totalLimitUp || stocks.length || 43} 家
+                {summary?.sealSuccessRate || 92.5}%
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">
-                跌停: {summary?.totalLimitDown || 2} 家
+              <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                日内炸板 {summary?.brokenCount || 4} 家
               </div>
             </div>
 
-            {/* 4. 昨日连板今日溢价 */}
+            {/* 3. 涨停数量 */}
             <div className="bg-[#121824] rounded-lg p-3 border border-[#232f42]">
               <div className="text-xs text-slate-400 mb-1 flex items-center justify-between">
-                <span>昨连板溢价</span>
+                <span>涨停家数</span>
+                <Flame className="w-3.5 h-3.5 text-red-400" />
+              </div>
+              <div className="text-lg font-bold font-mono text-white">
+                {summary?.totalLimitUp || stocks.length} 家
+              </div>
+              <div className="text-[11px] text-emerald-400 truncate mt-0.5">
+                跌停仅 {summary?.totalLimitDown || 2} 家
+              </div>
+            </div>
+
+            {/* 4. 昨日溢价率 */}
+            <div className="bg-[#121824] rounded-lg p-3 border border-[#232f42]">
+              <div className="text-xs text-slate-400 mb-1 flex items-center justify-between">
+                <span>昨日连板溢价</span>
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div className="text-lg font-bold font-mono text-red-400">
-                +{summary?.yesterdayPremium || 4.85}%
+                +{summary?.yesterdayPremium || 4.2}%
               </div>
-              <div className="text-[11px] text-emerald-400 mt-0.5">赚钱效应活跃</div>
+              <div className="text-[11px] text-slate-400 truncate mt-0.5">
+                隔夜开盘赚钱效应好
+              </div>
             </div>
 
             {/* 5. 空间高度板 */}
@@ -346,7 +376,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Consecutive boards filter pills */}
+            {/* Consecutive boards filter pills for Ladder */}
             {activeTab === 'ladder' && (
               <div className="flex items-center bg-[#101622] p-0.5 rounded-md border border-[#1e293b] text-xs">
                 {[
@@ -372,37 +402,63 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
               </div>
             )}
 
-            {/* Sector Selector */}
-            <div className="flex items-center gap-1.5 bg-[#101622] px-2.5 py-1 rounded-md border border-[#1e293b] text-xs">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              <select
-                value={selectedSector}
-                onChange={(e) => setSelectedSector(e.target.value)}
-                className="bg-transparent text-slate-200 text-xs outline-none cursor-pointer pr-2"
-              >
-                <option value="all" className="bg-[#101622] text-slate-200">
-                  全部板块题材
-                </option>
-                {sectors.map((sec) => (
-                  <option
-                    key={sec.sectorName}
-                    value={sec.sectorName}
-                    className="bg-[#101622] text-slate-200"
+            {/* Dragon Tiger Seat Type filter pills */}
+            {activeTab === 'dragonTiger' && (
+              <div className="flex items-center bg-[#101622] p-0.5 rounded-md border border-[#1e293b] text-xs">
+                {[
+                  { label: `全部席位 (${dragonTiger.length})`, val: 'all' },
+                  { label: `🏛️ 机构专用 (${dragonTiger.filter((s) => s.seatType === 'institution').length})`, val: 'institution' },
+                  { label: `⚡ 顶级游资 (${dragonTiger.filter((s) => s.seatType === 'hot_money').length})`, val: 'hot_money' },
+                  { label: `🌐 北向外资 (${dragonTiger.filter((s) => s.seatType === 'northbound').length})`, val: 'northbound' },
+                ].map((item) => (
+                  <button
+                    key={item.val}
+                    onClick={() => setDragonTigerFilter(item.val as any)}
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer whitespace-nowrap ${
+                      dragonTigerFilter === item.val
+                        ? 'bg-[#1e293b] text-amber-300 font-semibold'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
                   >
-                    {sec.sectorName} ({sec.limitUpCount}家)
-                  </option>
+                    {item.label}
+                  </button>
                 ))}
-              </select>
-            </div>
+              </div>
+            )}
+
+            {/* Sector Selector */}
+            {activeTab !== 'dragonTiger' && (
+              <div className="flex items-center gap-1.5 bg-[#101622] px-2.5 py-1 rounded-md border border-[#1e293b] text-xs">
+                <Filter className="w-3.5 h-3.5 text-slate-400" />
+                <select
+                  value={selectedSector}
+                  onChange={(e) => setSelectedSector(e.target.value)}
+                  className="bg-transparent text-slate-200 text-xs outline-none cursor-pointer pr-2"
+                >
+                  <option value="all" className="bg-[#101622] text-slate-200">
+                    全部板块题材
+                  </option>
+                  {validSectors.map((sec) => (
+                    <option
+                      key={sec.sectorName}
+                      value={sec.sectorName}
+                      className="bg-[#101622] text-slate-200"
+                    >
+                      {sec.sectorName} ({sec.limitUpCount}家)
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Search Input */}
             <div className="relative">
               <input
                 type="text"
-                placeholder="搜索股票 / 代码 / 题材..."
+                placeholder={activeTab === 'dragonTiger' ? '搜索游资大师 / 营业部 / 标的...' : '搜索股票 / 代码 / 题材...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-44 sm:w-56 bg-[#101622] border border-[#1e293b] rounded-md px-2.5 py-1 pl-7 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
+                className="w-48 sm:w-60 bg-[#101622] border border-[#1e293b] rounded-md px-2.5 py-1 pl-7 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/50"
               />
               <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2 top-1/2 -translate-y-1/2" />
             </div>
@@ -413,433 +469,489 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
       {/* 3. Tab Contents */}
       <div className="p-5 flex-1">
         <div className="max-w-7xl mx-auto">
-          {/* ================= TAB 1: 连板天梯梯队 (Ladder View) ================= */}
-          {activeTab === 'ladder' && (
-            <div className="space-y-6">
-              {/* If no results found */}
-              {filteredStocks.length === 0 && (
-                <div className="p-12 text-center text-slate-500 bg-[#0c1118] rounded-xl border border-[#18202c]">
-                  未找到符合筛选条件的连板股票
-                </div>
-              )}
-
-              {/* Render Ladder Levels */}
-              {[4, 3, 2, 1].map((level) => {
-                const groupStocks = ladderGroups.get(level) || [];
-                if (groupStocks.length === 0) return null;
-
-                const levelTitle =
-                  level === 4
-                    ? '🏆 高标空间梯队 (≥4连板 龙头总决选)'
-                    : level === 3
-                    ? '🔥 3连板 强势加速梯队 (中位晋级)'
-                    : level === 2
-                    ? '⚡ 2连板 题材发酵梯队 (强弱分化)'
-                    : '🌱 1板 首板先锋挖掘 (新催化启动)';
-
-                return (
-                  <div key={level} className="space-y-3">
-                    {/* Level Section Header */}
-                    <div className="flex items-center justify-between border-b border-[#1e293b] pb-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            level === 4
-                              ? 'bg-red-500 animate-ping'
-                              : level === 3
-                              ? 'bg-orange-500'
-                              : level === 2
-                              ? 'bg-amber-500'
-                              : 'bg-blue-500'
-                          }`}
-                        ></span>
-                        <h3 className="text-sm font-bold text-slate-200 tracking-wide">
-                          {levelTitle}
-                        </h3>
-                      </div>
-                      <span className="text-xs font-mono text-slate-400 bg-[#121824] px-2 py-0.5 rounded border border-[#1e293b]">
-                        共 {groupStocks.length} 家
-                      </span>
-                    </div>
-
-                    {/* Stock Cards Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-                      {groupStocks.map((stock) => (
-                        <div
-                          key={stock.code}
-                          onClick={() => onSelectStock(stock.code)}
-                          className="bg-[#0e141d] hover:bg-[#141d2a] border border-[#1d2737] hover:border-amber-500/50 rounded-xl p-4 transition-all duration-150 cursor-pointer group shadow-sm flex flex-col justify-between"
-                        >
-                          <div>
-                            {/* Card Top: Stock Name, Code, Board Badge, Price & Change */}
-                            <div className="flex items-start justify-between gap-2 mb-2.5">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h4 className="text-base font-bold text-white group-hover:text-amber-400 transition flex items-center gap-1.5">
-                                    {stock.name}
-                                    <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-amber-400 transition" />
-                                  </h4>
-                                  <span
-                                    className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${getBoardBadgeColor(
-                                      stock.consecutiveBoards
-                                    )}`}
-                                  >
-                                    {stock.boardText}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
-                                  <span>{stock.code}</span>
-                                  <span>·</span>
-                                  <span className="text-slate-300 font-medium bg-[#16202e] px-1.5 py-0.2 rounded">
-                                    {stock.sector}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Price & Change% */}
-                              <div className="text-right">
-                                <div className="text-base font-bold font-mono text-red-400">
-                                  ¥{stock.price.toFixed(2)}
-                                </div>
-                                <div className="text-xs font-bold font-mono text-red-500">
-                                  +{stock.changePercent.toFixed(2)}%
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Sub concepts chips */}
-                            <div className="flex flex-wrap gap-1.5 mb-3">
-                              {stock.subConcepts.map((concept, idx) => (
-                                <span
-                                  key={idx}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-[#16202e] text-slate-300 border border-slate-700/50"
-                                >
-                                  {concept}
-                                </span>
-                              ))}
-                            </div>
-
-                            {/* Limit-Up Details Grid */}
-                            <div className="grid grid-cols-3 gap-2 bg-[#090d14] rounded-lg p-2.5 mb-3 border border-[#16202e] text-xs font-mono">
-                              <div>
-                                <div className="text-[10px] text-slate-500">封单金额</div>
-                                <div className="text-amber-300 font-semibold truncate">
-                                  {formatMoney(stock.sealAmount)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-500">换手率</div>
-                                <div className="text-slate-300 font-semibold">
-                                  {stock.turnoverRate.toFixed(1)}%
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-500">首次封板</div>
-                                <div className="text-slate-300 font-semibold truncate">
-                                  {stock.firstTime}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-500">成交额</div>
-                                <div className="text-slate-300 truncate">
-                                  {formatMoney(stock.turnover)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-500">流通市值</div>
-                                <div className="text-slate-300 truncate">
-                                  {formatMoney(stock.marketCap)}
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-[10px] text-slate-500">开板状态</div>
-                                <div
-                                  className={`text-[11px] font-sans font-medium ${
-                                    stock.isBroken ? 'text-amber-400' : 'text-emerald-400'
-                                  }`}
-                                >
-                                  {stock.isBroken ? `烂板 (${stock.openCount}次)` : '一封到底'}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Limit-up logic reason */}
-                            <div className="text-xs text-slate-300 bg-[#121924]/60 p-2 rounded border border-[#1a2536] line-clamp-2 leading-relaxed">
-                              <span className="text-amber-400 font-medium">驱动逻辑: </span>
-                              {stock.reason}
-                            </div>
-                          </div>
-
-                          {/* Card Footer: Dragon Tiger seats & action hint */}
-                          <div className="mt-3 pt-2.5 border-t border-[#182230] flex items-center justify-between text-xs text-slate-400">
-                            <span className="text-[11px] truncate max-w-[200px] text-slate-400">
-                              席位: {stock.dragonTigerType || '游资合力抢筹'}
-                            </span>
-                            <span className="text-amber-400 font-medium flex items-center gap-1 group-hover:translate-x-0.5 transition text-[11px]">
-                              <span>图表研判</span>
-                              <ArrowRight className="w-3 h-3" />
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+          {/* Skeleton loading overlay when initial data is loading */}
+          {isLoading && stocks.length === 0 ? (
+            <div className="space-y-6 animate-pulse">
+              <div className="flex items-center justify-center p-12 bg-[#0c1118] border border-[#18202c] rounded-xl text-center">
+                <div className="space-y-3">
+                  <div className="w-10 h-10 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                  <div className="text-sm font-semibold text-white">
+                    正在实时同步 A 股全市场连板天梯与龙虎榜席位数据...
                   </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* ================= TAB 2: 板块连板题材 (Sector Matrix) ================= */}
-          {activeTab === 'sectors' && (
-            <div className="space-y-4">
-              {/* Filter Notice Banner */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#111827] border border-amber-500/20 px-4 py-2.5 rounded-lg text-xs">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <span className="flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                  </span>
-                  <span className="font-semibold text-amber-400">板块连板聚焦机制：</span>
-                  <span className="text-slate-400">
-                    已自动过滤 0~1 家零散标的，当前仅展示 <span className="text-white font-bold font-mono">{validSectors.length}</span> 个拥有 <span className="text-amber-300 font-bold">2家及以上</span> 涨停/连板个股的主线共振板块
-                  </span>
-                </div>
-                <div className="text-slate-400 font-mono text-[11px]">
-                  共振主线共计 <span className="text-red-400 font-bold">{validSectors.reduce((acc, s) => acc + s.limitUpCount, 0)}</span> 只核心涨停标的
+                  <div className="text-xs text-slate-500">
+                    智能解析连板高度梯队 · 筛选主线连板板块 · 深度穿透游资与机构交易画像
+                  </div>
                 </div>
               </div>
-
-              {validSectors.length === 0 ? (
-                <div className="bg-[#0e141d] border border-[#1e293b] rounded-xl p-12 text-center">
-                  <div className="text-3xl mb-3">🔍</div>
-                  <div className="text-sm font-bold text-slate-300">暂无 2 家及以上连板的共振板块</div>
-                  <div className="text-xs text-slate-500 mt-1">当前市场个股处于分散轮动阶段，未形成2家以上涨停抱团的主线题材</div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {validSectors.map((sec) => (
-                    <div
-                      key={sec.sectorName}
-                      className="bg-[#0e141d] border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4 hover:border-[#2a384e] transition"
-                    >
-                      {/* Sector Header */}
-                      <div className="flex items-start justify-between gap-3 border-b border-[#182230] pb-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-bold text-white tracking-wide">
-                              {sec.sectorName}
-                            </h3>
-                            <span className="text-xs font-bold font-mono px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
-                              +{sec.sectorChangePercent.toFixed(2)}%
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                            {sec.catalyst}
-                          </p>
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <div className="text-xs text-slate-500">板块连板/涨停</div>
-                          <div className="text-lg font-bold font-mono text-amber-400">
-                            {sec.limitUpCount} <span className="text-xs font-normal">家</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Sector Leader Highlight */}
-                      <div className="bg-[#121924] rounded-lg p-3 border border-amber-500/30 flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <span className="p-1.5 rounded bg-amber-500/20 text-amber-400 text-xs">
-                            👑
-                          </span>
-                          <div>
-                            <div className="text-xs text-slate-400">板块龙头领涨股</div>
-                            <div className="text-sm font-bold text-amber-300">
-                              {sec.leaderStock.name}{' '}
-                              <span className="font-mono text-xs text-slate-400 font-normal">
-                                ({sec.leaderStock.code})
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-bold px-2 py-0.5 rounded-full border ${getBoardBadgeColor(
-                              sec.leaderStock.consecutiveBoards
-                            )}`}
-                          >
-                            {sec.leaderStock.boardText}
-                          </span>
-                          <button
-                            onClick={() => onSelectStock(sec.leaderStock.code)}
-                            className="px-2.5 py-1 bg-[#1e293b] hover:bg-amber-600 text-white rounded text-xs font-medium transition cursor-pointer"
-                          >
-                            分析龙头
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Sector Stocks Chips List */}
-                      <div>
-                        <div className="text-xs text-slate-400 mb-2 font-medium flex items-center justify-between">
-                          <span>板块内共振涨停股票池 ({sec.stocks.length}家):</span>
-                          <span className="text-[11px] text-slate-500">点击卡片切换个股</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {sec.stocks.map((stk) => (
-                            <div
-                              key={stk.code}
-                              onClick={() => onSelectStock(stk.code)}
-                              className="bg-[#090d14] hover:bg-[#16202e] border border-[#182230] hover:border-amber-500/50 rounded-lg p-2.5 transition cursor-pointer flex items-center justify-between group"
-                            >
-                              <div>
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-bold text-slate-200 group-hover:text-amber-400 transition">
-                                    {stk.name}
-                                  </span>
-                                  <span
-                                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${getBoardBadgeColor(
-                                      stk.consecutiveBoards
-                                    )}`}
-                                  >
-                                    {stk.boardText}
-                                  </span>
-                                </div>
-                                <div className="text-[11px] font-mono text-slate-400">
-                                  {stk.code} · 封单 {formatMoney(stk.sealAmount)}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs font-bold font-mono text-red-400">
-                                  ¥{stk.price.toFixed(2)}
-                                </div>
-                                <div className="text-[10px] text-red-500 font-mono">
-                                  +{stk.changePercent.toFixed(2)}%
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ================= TAB 3: 龙虎榜游资机构 (Dragon & Tiger Seats) ================= */}
-          {activeTab === 'dragonTiger' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {dragonTiger.map((seat, sIdx) => (
-                  <div
-                    key={sIdx}
-                    className="bg-[#0e141d] border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4"
-                  >
-                    {/* Seat Header */}
-                    <div className="flex items-start justify-between gap-3 border-b border-[#182230] pb-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs px-2 py-0.5 rounded font-bold ${
-                              seat.seatType === 'institution'
-                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                            }`}
-                          >
-                            {seat.seatType === 'institution' ? '机构席位' : '顶级游资'}
-                          </span>
-                          <h3 className="text-base font-bold text-white">
-                            {seat.seatName}
-                          </h3>
-                        </div>
-                        {seat.winRate30d && (
-                          <div className="text-xs text-slate-400 mt-1">
-                            近30日跟风胜率: <span className="font-mono text-emerald-400 font-bold">{seat.winRate30d}%</span>
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500">今日上榜净买额</div>
-                        <div className="text-base font-bold font-mono text-red-400">
-                          {((seat.netBuyTotal ?? seat.netBuyAmount ?? 0) >= 0 ? '+' : '') +
-                            formatMoney(seat.netBuyTotal ?? seat.netBuyAmount ?? 0)}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Traded Stocks Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left">
-                        <thead>
-                          <tr className="text-slate-500 border-b border-[#182230]">
-                            <th className="pb-2 font-medium">标的</th>
-                            <th className="pb-2 font-medium">连板高度</th>
-                            <th className="pb-2 font-medium text-right">买入/成交额</th>
-                            <th className="pb-2 font-medium text-right">净买额</th>
-                            <th className="pb-2 font-medium text-center">操作</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#182230]">
-                          {(seat.stocksTraded && seat.stocksTraded.length > 0
-                            ? seat.stocksTraded
-                            : seat.code
-                            ? [
-                                {
-                                  code: seat.code,
-                                  name: seat.name || `标的${seat.code}`,
-                                  buyAmount: seat.totalAmount || seat.netBuyAmount || 0,
-                                  sellAmount: 0,
-                                  netAmount: seat.netBuyAmount || 0,
-                                  consecutiveBoards: seat.consecutiveBoards || 1,
-                                  boardText: seat.boardText || '上榜',
-                                },
-                              ]
-                            : []
-                          ).map((stk) => (
-                            <tr key={stk.code} className="hover:bg-[#121924]">
-                              <td className="py-2.5">
-                                <div className="font-bold text-slate-200">
-                                  {stk.name}
-                                </div>
-                                <div className="font-mono text-[11px] text-slate-500">
-                                  {stk.code}
-                                </div>
-                              </td>
-                              <td className="py-2.5">
-                                <span
-                                  className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${getBoardBadgeColor(
-                                    stk.consecutiveBoards
-                                  )}`}
-                                >
-                                  {stk.boardText}
-                                </span>
-                              </td>
-                              <td className="py-2.5 text-right font-mono text-slate-300">
-                                {formatMoney(stk.buyAmount)}
-                              </td>
-                              <td className="py-2.5 text-right font-mono font-bold text-red-400">
-                                +{formatMoney(stk.netAmount)}
-                              </td>
-                              <td className="py-2.5 text-center">
-                                <button
-                                  onClick={() => onSelectStock(stk.code)}
-                                  className="px-2 py-1 bg-[#1e293b] hover:bg-amber-600 text-white rounded text-[11px] transition cursor-pointer"
-                                >
-                                  研判
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[1, 2, 3, 4, 5, 6].map((i) => (
+                  <div key={i} className="h-44 bg-[#0e141d] border border-[#1e293b] rounded-xl p-4"></div>
                 ))}
               </div>
             </div>
+          ) : (
+            <>
+              {/* ================= TAB 1: 连板天梯梯队 (Ladder View) ================= */}
+              {activeTab === 'ladder' && (
+                <div className="space-y-6">
+                  {/* If no results found */}
+                  {filteredStocks.length === 0 && (
+                    <div className="p-12 text-center text-slate-500 bg-[#0c1118] rounded-xl border border-[#18202c]">
+                      未找到符合筛选条件的连板股票
+                    </div>
+                  )}
+
+                  {/* Render Ladder Levels */}
+                  {[4, 3, 2, 1].map((level) => {
+                    const groupStocks = ladderGroups.get(level) || [];
+                    if (groupStocks.length === 0) return null;
+
+                    const levelTitle =
+                      level === 4
+                        ? '🏆 高标空间梯队 (≥4连板 龙头总决选)'
+                        : level === 3
+                        ? '🔥 3连板 强势加速梯队 (中位晋级)'
+                        : level === 2
+                        ? '⚡ 2连板 题材发酵梯队 (强弱分化)'
+                        : '🌱 1板 首板先锋挖掘 (新催化启动)';
+
+                    return (
+                      <div key={level} className="space-y-3">
+                        {/* Level Section Header */}
+                        <div className="flex items-center justify-between border-b border-[#1e293b] pb-2">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2.5 h-2.5 rounded-full ${
+                                level === 4
+                                  ? 'bg-red-500 animate-ping'
+                                  : level === 3
+                                  ? 'bg-orange-500'
+                                  : level === 2
+                                  ? 'bg-amber-500'
+                                  : 'bg-blue-500'
+                              }`}
+                            ></span>
+                            <h3 className="text-base font-bold text-white tracking-wide">
+                              {levelTitle}
+                            </h3>
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-[#182230] text-slate-300 font-mono">
+                              共 {groupStocks.length} 家
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Stocks Grid for this level */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {groupStocks.map((stock) => (
+                            <div
+                              key={stock.code}
+                              className={`bg-[#0e141d] border rounded-xl p-4 transition-all duration-200 hover:border-[#d4a038]/60 hover:shadow-lg hover:shadow-black/40 flex flex-col justify-between space-y-3 relative group ${
+                                stock.consecutiveBoards >= 4
+                                  ? 'border-red-500/40 bg-gradient-to-br from-[#181115] to-[#0e141d]'
+                                  : stock.consecutiveBoards === 3
+                                  ? 'border-orange-500/30'
+                                  : 'border-[#1e293b]'
+                              }`}
+                            >
+                              {/* Top Bar: Stock Name, Code, Board Badge, Price */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="text-base font-bold text-white group-hover:text-amber-400 transition">
+                                      {stock.name}
+                                    </h4>
+                                    <span className="text-xs font-mono text-slate-400">
+                                      {stock.code}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-1">
+                                    <span
+                                      className={`text-[11px] font-bold px-2 py-0.5 rounded ${getBoardBadgeColor(
+                                        stock.consecutiveBoards
+                                      )}`}
+                                    >
+                                      {stock.boardText}
+                                    </span>
+                                    <span className="text-[11px] px-2 py-0.5 rounded bg-[#182230] text-slate-300">
+                                      {stock.sector}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="text-right">
+                                  <div className="text-base font-bold font-mono text-red-400">
+                                    ¥{stock.price.toFixed(2)}
+                                  </div>
+                                  <div className="text-xs font-mono font-semibold text-red-500">
+                                    +{stock.changePercent.toFixed(2)}%
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Middle: Turnover, Seal Amount, Turnover Rate */}
+                              <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-[#080c12] rounded-lg border border-[#141b25] text-xs">
+                                <div>
+                                  <div className="text-[10px] text-slate-500">封单金额</div>
+                                  <div className="font-mono font-semibold text-amber-300">
+                                    {formatMoney(stock.sealAmount)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-slate-500">今日成交</div>
+                                  <div className="font-mono font-semibold text-slate-200">
+                                    {formatMoney(stock.turnover)}
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-[10px] text-slate-500">换手率</div>
+                                  <div className="font-mono font-semibold text-slate-200">
+                                    {stock.turnoverRate.toFixed(2)}%
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Reason Catalyst Text */}
+                              <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                                <span className="text-amber-400/90 font-medium">【题材催化】</span>
+                                {stock.reason}
+                              </p>
+
+                              {/* Action Footer */}
+                              <div className="flex items-center justify-between pt-1 border-t border-[#182230]">
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {stock.dragonTigerType || '游资深度参与'}
+                                </span>
+                                <button
+                                  onClick={() => onSelectStock(stock.code)}
+                                  className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-medium transition cursor-pointer"
+                                >
+                                  <span>量化研判</span>
+                                  <ArrowRight className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ================= TAB 2: 板块连板题材 (Sector Limit Up Groups) ================= */}
+              {activeTab === 'sectors' && (
+                <div className="space-y-6">
+                  {validSectors.length === 0 && (
+                    <div className="p-12 text-center text-slate-500 bg-[#0c1118] rounded-xl border border-[#18202c]">
+                      暂无 ≥2 家连板/涨停公司的主线板块数据
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {validSectors.map((sector, idx) => (
+                      <div
+                        key={sector.sectorId || sector.sectorName || idx}
+                        className="bg-[#0e141d] border border-[#1e293b] rounded-xl p-5 shadow-sm space-y-4 hover:border-amber-500/40 transition"
+                      >
+                        {/* Sector Header */}
+                        <div className="flex items-start justify-between gap-3 border-b border-[#182230] pb-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                              <h3 className="text-lg font-bold text-white">
+                                {sector.sectorName}
+                              </h3>
+                              <span className="text-xs px-2 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 font-bold">
+                                {sector.limitUpCount} 家涨停/连板
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                              {sector.catalyst || '板块日内多股涨停，资金聚集形成主线效应。'}
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="text-xs text-slate-500">板块涨幅</div>
+                            <div
+                              className={`text-base font-bold font-mono ${
+                                sector.sectorChangePercent >= 0 ? 'text-red-400' : 'text-emerald-400'
+                              }`}
+                            >
+                              {sector.sectorChangePercent >= 0 ? '+' : ''}
+                              {sector.sectorChangePercent.toFixed(2)}%
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Leader Stock Spotlight */}
+                        {sector.leaderStock && (
+                          <div className="flex items-center justify-between p-3 bg-gradient-to-r from-red-950/30 to-[#101722] rounded-lg border border-red-500/20">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
+                                板块空间龙头
+                              </span>
+                              <span className="text-sm font-bold text-white">
+                                {sector.leaderStock.name}
+                              </span>
+                              <span className="text-xs font-mono text-slate-400">
+                                {sector.leaderStock.code}
+                              </span>
+                              <span
+                                className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${getBoardBadgeColor(
+                                  sector.leaderStock.consecutiveBoards
+                                )}`}
+                              >
+                                {sector.leaderStock.boardText}
+                              </span>
+                            </div>
+
+                            <button
+                              onClick={() => onSelectStock(sector.leaderStock.code)}
+                              className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black rounded text-xs font-semibold transition cursor-pointer"
+                            >
+                              查看龙头
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Stocks in this sector */}
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold text-slate-400 flex items-center justify-between">
+                            <span>板块涨停梯队标的</span>
+                            <span className="font-mono text-slate-500">
+                              共 {sector.stocks?.length || sector.limitUpCount} 标的
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {(sector.stocks || []).map((stk) => (
+                              <div
+                                key={stk.code}
+                                onClick={() => onSelectStock(stk.code)}
+                                className="flex items-center justify-between p-2.5 bg-[#080d14] hover:bg-[#131b26] border border-[#141b25] hover:border-slate-700 rounded-lg cursor-pointer transition group"
+                              >
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-xs text-slate-200 group-hover:text-amber-400 transition">
+                                      {stk.name}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-slate-500">
+                                      {stk.code}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span
+                                      className={`text-[9px] font-bold px-1 py-0.2 rounded ${getBoardBadgeColor(
+                                        stk.consecutiveBoards
+                                      )}`}
+                                    >
+                                      {stk.boardText}
+                                    </span>
+                                    <span className="text-[9px] text-slate-500 font-mono">
+                                      封单 {formatMoney(stk.sealAmount)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-xs font-bold font-mono text-red-400">
+                                    ¥{stk.price.toFixed(2)}
+                                  </div>
+                                  <div className="text-[10px] text-red-500 font-mono">
+                                    +{stk.changePercent.toFixed(2)}%
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ================= TAB 3: 龙虎榜游资机构 (Dragon & Tiger Seats) ================= */}
+              {activeTab === 'dragonTiger' && (
+                <div className="space-y-6">
+                  {filteredDragonTiger.length === 0 && (
+                    <div className="p-12 text-center text-slate-500 bg-[#0c1118] rounded-xl border border-[#18202c]">
+                      暂无符合条件的龙虎榜席位数据
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {filteredDragonTiger.map((seat, sIdx) => {
+                      const isInst = seat.seatType === 'institution';
+                      const isNorth = seat.seatType === 'northbound';
+
+                      return (
+                        <div
+                          key={sIdx}
+                          className={`bg-[#0e141d] border rounded-xl p-5 shadow-sm space-y-4 hover:border-[#d4a038]/60 transition ${
+                            isInst
+                              ? 'border-purple-500/30 bg-gradient-to-br from-[#120f1c] to-[#0e141d]'
+                              : isNorth
+                              ? 'border-cyan-500/30 bg-gradient-to-br from-[#0c161d] to-[#0e141d]'
+                              : 'border-[#1e293b] bg-gradient-to-br from-[#16120e] to-[#0e141d]'
+                          }`}
+                        >
+                          {/* Seat Header with Mastermind Name, Tag, Description */}
+                          <div className="flex items-start justify-between gap-3 border-b border-[#182230] pb-3">
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {/* Type Badge */}
+                                <span
+                                  className={`text-xs px-2.5 py-0.5 rounded font-bold flex items-center gap-1 ${
+                                    isInst
+                                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                      : isNorth
+                                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                  }`}
+                                >
+                                  {isInst ? (
+                                    <>
+                                      <Building2 className="w-3 h-3" />
+                                      <span>机构专用席位</span>
+                                    </>
+                                  ) : isNorth ? (
+                                    <>
+                                      <Globe2 className="w-3 h-3" />
+                                      <span>北向外资通道</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <UserCheck className="w-3 h-3" />
+                                      <span>顶级知名游资</span>
+                                    </>
+                                  )}
+                                </span>
+
+                                {/* Mastermind Person/Group Tag */}
+                                {seat.hotMoneyTag && (
+                                  <span className="text-xs px-2 py-0.5 rounded bg-[#182230] text-amber-300 font-bold border border-amber-500/30">
+                                    {seat.hotMoneyTag}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Prominent Full Seat & Master Name */}
+                              <h3 className="text-base font-bold text-white tracking-wide leading-snug">
+                                {seat.seatName}
+                              </h3>
+
+                              {/* Master Trader Style Description */}
+                              {seat.description && (
+                                <p className="text-xs text-slate-400 leading-relaxed">
+                                  {seat.description}
+                                </p>
+                              )}
+
+                              {/* Win rate indicator */}
+                              {seat.winRate30d && (
+                                <div className="text-xs text-slate-400 pt-0.5 flex items-center gap-2">
+                                  <span>近30日跟风胜率:</span>
+                                  <span className="font-mono text-emerald-400 font-bold">
+                                    {seat.winRate30d}%
+                                  </span>
+                                  <span className="text-slate-600">|</span>
+                                  <span>上榜标的数:</span>
+                                  <span className="font-mono text-slate-200 font-bold">
+                                    {seat.stocksTraded?.length || 1} 只
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Total Buy / Net Amount */}
+                            <div className="text-right shrink-0 bg-[#080d14] px-3 py-2 rounded-lg border border-[#141b25]">
+                              <div className="text-[11px] text-slate-500">今日上榜买入总额</div>
+                              <div className="text-base font-bold font-mono text-red-400">
+                                {formatMoney(seat.totalBuy || seat.netBuyTotal || 0)}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-400 mt-0.5">
+                                净买入:{' '}
+                                <span
+                                  className={
+                                    (seat.netBuyTotal || 0) >= 0 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'
+                                  }
+                                >
+                                  {formatMoney(seat.netBuyTotal || 0)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Traded Stocks Table */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left">
+                              <thead>
+                                <tr className="text-slate-500 border-b border-[#182230]">
+                                  <th className="pb-2 font-medium">重仓标的</th>
+                                  <th className="pb-2 font-medium">连板状态</th>
+                                  <th className="pb-2 font-medium text-right">买入金额</th>
+                                  <th className="pb-2 font-medium text-right">净买额</th>
+                                  <th className="pb-2 font-medium text-center">量化研判</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-[#182230]">
+                                {(seat.stocksTraded || []).map((stk) => (
+                                  <tr key={stk.code} className="hover:bg-[#121924] transition">
+                                    <td className="py-2.5">
+                                      <div className="font-bold text-slate-200 flex items-center gap-1.5">
+                                        <span>{stk.name}</span>
+                                        {stk.changePercent !== undefined && (
+                                          <span
+                                            className={`text-[10px] font-mono font-semibold ${
+                                              stk.changePercent >= 0 ? 'text-red-400' : 'text-emerald-400'
+                                            }`}
+                                          >
+                                            {stk.changePercent >= 0 ? '+' : ''}
+                                            {stk.changePercent.toFixed(2)}%
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="font-mono text-[11px] text-slate-500">
+                                        {stk.code}
+                                      </div>
+                                    </td>
+                                    <td className="py-2.5">
+                                      <span
+                                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${getBoardBadgeColor(
+                                          stk.consecutiveBoards
+                                        )}`}
+                                      >
+                                        {stk.boardText}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 text-right font-mono text-slate-300 font-medium">
+                                      {formatMoney(stk.buyAmount)}
+                                    </td>
+                                    <td className="py-2.5 text-right font-mono font-bold">
+                                      <span className={stk.netAmount >= 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                        {formatMoney(stk.netAmount)}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 text-center">
+                                      <button
+                                        onClick={() => onSelectStock(stk.code)}
+                                        className="px-2.5 py-1 bg-[#1e293b] hover:bg-amber-600 hover:text-black text-slate-200 rounded text-[11px] font-medium transition cursor-pointer"
+                                      >
+                                        研判
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

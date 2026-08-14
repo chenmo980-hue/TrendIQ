@@ -655,6 +655,10 @@ ${JSON.stringify(marketContext || [], null, 2)}
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[TrendIQ] Server running on http://0.0.0.0:${PORT}`);
+    // Warm up limit-up and dragon tiger cache asynchronously
+    setTimeout(() => {
+      getRealTimeLimitUpBoardData().catch(() => {});
+    }, 1000);
   });
 }
 
