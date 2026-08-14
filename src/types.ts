@@ -125,8 +125,6 @@ export interface AIAnalysisResponse {
   riskNotice: string;
   confidenceScore: number;
   generatedAt: string;
-  source?: 'gemini' | 'offline-engine' | string;
-  notice?: string;
 }
 
 export interface VisionPattern {

@@ -1,77 +1,126 @@
 import React from 'react';
-import { TechnicalJudgment } from '../types';
+import { IndicatorSummary, TechnicalJudgment } from '../types';
+import { ShieldAlert, TrendingUp, TrendingDown, Minus, Zap } from 'lucide-react';
 
 interface IndicatorPulseProps {
   judgment: TechnicalJudgment | null;
 }
 
 export const IndicatorPulse: React.FC<IndicatorPulseProps> = ({ judgment }) => {
-  if (!judgment || !judgment.indicatorsSummary || !Array.isArray(judgment.indicatorsSummary)) {
-    return null;
-  }
+  if (!judgment) return null;
 
-  const items = judgment.indicatorsSummary;
-  const maItem = items.find((i) => i.name.includes('MA'));
-  const macdItem = items.find((i) => i.name.includes('MACD'));
-  const rsiItem = items.find((i) => i.name.includes('RSI'));
-  const kdjItem = items.find((i) => i.name.includes('KDJ'));
-  const bollItem = items.find((i) => i.name.includes('BOLL'));
+  const { indicatorsSummary, score, direction } = judgment;
 
-  const getDotColor = (status?: 'bullish' | 'bearish' | 'neutral') => {
-    if (status === 'bullish') return 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)]';
-    if (status === 'bearish') return 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]';
-    return 'bg-slate-400';
+  // Bullish / Bearish color styles
+  const getBadgeStyle = (status: 'bullish' | 'bearish' | 'neutral') => {
+    if (status === 'bullish') {
+      return {
+        bg: 'bg-rose-500/10 border-rose-500/30 text-rose-300',
+        dot: 'bg-rose-500 shadow-rose-500/50',
+        label: '偏多',
+      };
+    }
+    if (status === 'bearish') {
+      return {
+        bg: 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300',
+        dot: 'bg-emerald-500 shadow-emerald-500/50',
+        label: '偏空',
+      };
+    }
+    return {
+      bg: 'bg-slate-500/10 border-slate-500/30 text-slate-300',
+      dot: 'bg-slate-400',
+      label: '中性',
+    };
   };
-
-  const getTextColor = (status?: 'bullish' | 'bearish' | 'neutral') => {
-    if (status === 'bullish') return 'text-rose-400';
-    if (status === 'bearish') return 'text-emerald-400';
-    return 'text-slate-400';
-  };
-
-  // Extract concise tag label
-  const getShortText = (item?: { text: string; status: string }) => {
-    if (!item || !item.text) return '中性';
-    const t = item.text;
-    if (t.includes('多头排列')) return '多头排列';
-    if (t.includes('空头排列')) return '空头排列';
-    if (t.includes('站上20日') || t.includes('短均线上穿')) return '短均线上穿';
-    if (t.includes('承压20日') || t.includes('死叉')) return '死叉';
-    if (t.includes('金叉')) return '金叉';
-    if (t.includes('红柱')) return '红柱';
-    if (t.includes('绿柱')) return '绿柱';
-    if (t.includes('超买')) return '超买';
-    if (t.includes('超卖')) return '超卖';
-    if (t.includes('中轨上方') || t.includes('多头通道')) return '中轨上方';
-    if (t.includes('中轨下方') || t.includes('中轨压制')) return '中轨下方';
-    if (t.includes('触及布林上轨')) return '触及上轨';
-    if (t.includes('触及布林下轨')) return '触及下轨';
-    return t.length > 8 ? t.slice(0, 8) : t;
-  };
-
-  const list = [
-    { label: 'MA', item: maItem },
-    { label: 'MACD', item: macdItem },
-    { label: 'RSI', item: rsiItem },
-    { label: 'KDJ', item: kdjItem },
-    { label: 'BOLL', item: bollItem },
-  ];
 
   return (
-    <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg px-4 py-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
-      {list.map(({ label, item }) => {
-        const status = item?.status || 'neutral';
-        const text = getShortText(item);
-        return (
-          <div key={label} className="flex items-center gap-2 min-w-0">
-            <span className={`w-2 h-2 rounded-full shrink-0 ${getDotColor(status)}`} />
-            <span className="text-xs text-slate-400 font-medium shrink-0">{label}</span>
-            <span className={`text-xs font-medium truncate ${getTextColor(status)}`}>
-              {text}
-            </span>
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center">
+            <Zap className="w-4 h-4" />
           </div>
-        );
-      })}
+          <div>
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              指标脉冲读数带
+              <span className="text-[11px] font-normal text-slate-400">
+                (5大技术维度多空共振实时监测)
+              </span>
+            </h3>
+          </div>
+        </div>
+
+        {/* Aggregate technical score pill */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400 font-medium">综合技术评分:</span>
+          <div
+            className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+              score >= 60
+                ? 'bg-rose-500/20 border-rose-500/50 text-rose-300'
+                : score <= 40
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                : 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+            }`}
+          >
+            {score >= 60 ? (
+              <TrendingUp className="w-3.5 h-3.5" />
+            ) : score <= 40 ? (
+              <TrendingDown className="w-3.5 h-3.5" />
+            ) : (
+              <Minus className="w-3.5 h-3.5" />
+            )}
+            <span className="font-mono text-sm">{score}</span>
+            <span>{direction}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Bar of Bull vs Bear Resonance */}
+      <div className="mb-4">
+        <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-mono">
+          <span className="text-emerald-400">空方动能 (0)</span>
+          <span className="text-slate-400">多空平衡 (50)</span>
+          <span className="text-rose-400">多方动能 (100)</span>
+        </div>
+        <div className="h-2.5 w-full bg-slate-950 rounded-full overflow-hidden p-0.5 border border-slate-800 flex relative">
+          {/* Middle mark */}
+          <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-700 z-10 -translate-x-1/2" />
+          <div
+            className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500"
+            style={{ width: `${score}%` }}
+          />
+        </div>
+      </div>
+
+      {/* 5 Indicator Pulse Chips Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        {indicatorsSummary.map((ind, i) => {
+          const badge = getBadgeStyle(ind.status);
+          return (
+            <div
+              key={i}
+              className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-2.5 flex flex-col justify-between hover:border-slate-700 transition"
+            >
+              <div className="flex items-center justify-between gap-1 mb-1.5">
+                <span className="text-xs font-semibold text-slate-200">{ind.name}</span>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded border flex items-center gap-1 ${badge.bg}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+                  {badge.label}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-snug line-clamp-2 mb-1.5">
+                {ind.text}
+              </p>
+              <div className="text-[10px] font-mono text-slate-400 pt-1 border-t border-slate-900 truncate">
+                {ind.valueDisplay}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
