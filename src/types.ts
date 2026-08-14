@@ -224,3 +224,72 @@ export interface StockSearchResult {
   fullCode: string;
   type?: string;
 }
+
+export interface LimitUpStock {
+  code: string;
+  name: string;
+  market: string;
+  fullCode: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  consecutiveBoards: number; // 连板数，如 7, 5, 4, 3, 2, 1
+  boardText: string; // e.g. "7连板", "5天4板", "3连板", "2连板", "首板"
+  sector: string; // 主线板块，如 "低空经济", "人形机器人", "半导体/算力"
+  subConcepts: string[]; // 关联概念细分
+  firstTime: string; // 首次封板时间 e.g. "09:25:00"
+  lastTime: string; // 最终封板时间 e.g. "09:30:15"
+  sealAmount: number; // 封单金额 (元)
+  sealRatio: number; // 封单比 (%)
+  turnover: number; // 成交额 (元)
+  turnoverRate: number; // 换手率 (%)
+  marketCap: number; // 流通市值 (元)
+  reason: string; // 涨停驱动与题材逻辑
+  dragonTigerType?: string; // 龙虎榜席位特征
+  netBuyAmount?: number; // 龙虎榜净买入 (元)
+  isBroken?: boolean; // 是否曾开板 / 烂板
+  openCount?: number; // 开板次数
+}
+
+export interface SectorLimitUpGroup {
+  sectorName: string;
+  sectorChangePercent: number;
+  limitUpCount: number;
+  leaderStock: {
+    code: string;
+    name: string;
+    consecutiveBoards: number;
+    boardText: string;
+  };
+  stocks: LimitUpStock[];
+  catalyst: string;
+}
+
+export interface DragonTigerSeat {
+  seatName: string;
+  seatType: 'institution' | 'hot_money' | 'northbound';
+  netBuyTotal: number;
+  winRate30d?: number; // 30天胜率
+  stocksTraded: {
+    code: string;
+    name: string;
+    buyAmount: number;
+    sellAmount: number;
+    netAmount: number;
+    consecutiveBoards: number;
+    boardText: string;
+  }[];
+}
+
+export interface LimitUpLadderSummary {
+  date: string;
+  totalLimitUp: number;
+  totalLimitDown: number;
+  brokenCount: number;
+  sealSuccessRate: number;
+  ladderDistribution: Record<number, number>; // { 7: 1, 5: 2, 4: 3, 3: 5, 2: 8, 1: 26 }
+  yesterdayLimitUpReturn: number;
+  marketSentimentScore: number;
+  sentimentPhase: string;
+}
+

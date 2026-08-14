@@ -8,6 +8,7 @@ import { aggregateMinuteKline } from './lib/aggregateMinuteKline';
 import { parseStructuredVisionAnalysis } from './lib/parseStructuredAnalysis';
 import { getGeminiAI } from './lib/geminiClient';
 import { withJsonSafety } from './lib/withJsonSafety';
+import { LIMIT_UP_STOCKS_DATA, SECTOR_LIMIT_UP_GROUPS, DRAGON_TIGER_SEATS_DATA, getLimitUpSummary } from './lib/limitUpData';
 import type { KlinePoint, StockQuote, StockSearchResult } from './src/types';
 
 /**
@@ -52,6 +53,50 @@ async function startServer() {
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
   });
+
+  // Limit-up and Dragon-Tiger Board endpoint
+  app.get('/api/limit-up-board', withJsonSafety(async (req, res) => {
+    const sectorFilter = String(req.query.sector || '').trim();
+    const boardsFilter = parseInt(String(req.query.boards || '0'), 10);
+    const searchFilter = String(req.query.q || '').trim().toLowerCase();
+
+    let stocks = [...LIMIT_UP_STOCKS_DATA];
+
+    if (sectorFilter && sectorFilter !== 'all') {
+      stocks = stocks.filter((s) => s.sector === sectorFilter || s.subConcepts.includes(sectorFilter));
+    }
+
+    if (boardsFilter > 0) {
+      if (boardsFilter >= 4) {
+        stocks = stocks.filter((s) => s.consecutiveBoards >= 4);
+      } else {
+        stocks = stocks.filter((s) => s.consecutiveBoards === boardsFilter);
+      }
+    }
+
+    if (searchFilter) {
+      stocks = stocks.filter(
+        (s) =>
+          s.code.includes(searchFilter) ||
+          s.name.toLowerCase().includes(searchFilter) ||
+          s.sector.toLowerCase().includes(searchFilter) ||
+          s.reason.toLowerCase().includes(searchFilter)
+      );
+    }
+
+    const summary = getLimitUpSummary();
+    const sectors = SECTOR_LIMIT_UP_GROUPS;
+    const dragonTiger = DRAGON_TIGER_SEATS_DATA;
+
+    res.json({
+      summary,
+      stocks,
+      allStocksCount: LIMIT_UP_STOCKS_DATA.length,
+      sectors,
+      dragonTiger,
+      timestamp: Date.now(),
+    });
+  }));
 
   // 2. Search stock endpoint
   app.get('/api/search', withJsonSafety(async (req, res) => {

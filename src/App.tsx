@@ -4,6 +4,7 @@ import { KlineChart } from './components/KlineChart';
 import { IndicatorPulse } from './components/IndicatorPulse';
 import { JudgmentPanel } from './components/JudgmentPanel';
 import { ImageAnalyzer } from './components/ImageAnalyzer';
+import { LimitUpBoard } from './components/LimitUpBoard';
 import {
   KlinePoint,
   StockQuote,
@@ -13,7 +14,7 @@ import {
 } from './types';
 import { formatPrice } from '../lib/stockCode';
 import { generateTechnicalJudgment } from '../lib/judgment';
-import { Clock, RotateCcw } from 'lucide-react';
+import { Clock, RotateCcw, Flame } from 'lucide-react';
 
 interface FrequentStock {
   code: string;
@@ -24,14 +25,16 @@ interface FrequentStock {
 
 const DEFAULT_FREQUENT_STOCKS: FrequentStock[] = [
   { name: '贵州茅台', code: '600519', count: 10, lastViewed: Date.now() - 1000 },
-  { name: '宁德时代', code: '300750', count: 8, lastViewed: Date.now() - 2000 },
+  { name: '万丰奥威', code: '002085', count: 9, lastViewed: Date.now() - 1500 },
+  { name: '中科曙光', code: '603019', count: 8, lastViewed: Date.now() - 2000 },
+  { name: '宁德时代', code: '300750', count: 8, lastViewed: Date.now() - 2500 },
   { name: '东方财富', code: '300059', count: 6, lastViewed: Date.now() - 3000 },
   { name: '中芯国际', code: '688981', count: 4, lastViewed: Date.now() - 4000 },
   { name: '比亚迪',   code: '002594', count: 2, lastViewed: Date.now() - 5000 },
 ];
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'indicator' | 'image'>('indicator');
+  const [currentTab, setCurrentTab] = useState<'indicator' | 'image' | 'limitUp'>('indicator');
   const [currentCode, setCurrentCode] = useState<string>('600519'); // Default to 贵州茅台
   const [currentPeriod, setCurrentPeriod] = useState<KlinePeriod>('day');
 
@@ -279,6 +282,15 @@ export default function App() {
                       <RotateCcw className="w-3 h-3" />
                     </button>
                   )}
+
+                  {/* Fast Jump to Limit Up Board */}
+                  <button
+                    onClick={() => setCurrentTab('limitUp')}
+                    className="ml-auto px-3 py-1 rounded-full bg-gradient-to-r from-red-600/20 to-amber-600/20 hover:from-red-600/30 hover:to-amber-600/30 border border-red-500/30 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <Flame className="w-3.5 h-3.5 text-red-400" />
+                    <span>查看短线龙虎榜 & 连板天梯</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -367,6 +379,14 @@ export default function App() {
               </div>
             )}
           </>
+        ) : currentTab === 'limitUp' ? (
+          /* Short-Term Limit-Up Ladder & Dragon-Tiger Board View */
+          <LimitUpBoard
+            onSelectStock={(selectedCode) => {
+              handleSelectStock(selectedCode);
+              setCurrentTab('indicator');
+            }}
+          />
         ) : (
           /* Vision AI Chart Analysis Recognition Tab */
           <ImageAnalyzer />
