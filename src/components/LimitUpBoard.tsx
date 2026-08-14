@@ -99,8 +99,8 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
     return stocks.filter((s) => {
       // Board filter
       if (selectedBoards === 99 && s.consecutiveBoards < 2) return false;
-      if (selectedBoards === 4 && s.consecutiveBoards < 4) return false;
-      if (selectedBoards > 0 && selectedBoards < 4 && s.consecutiveBoards !== selectedBoards)
+      if (selectedBoards >= 5 && s.consecutiveBoards < selectedBoards) return false;
+      if (selectedBoards > 0 && selectedBoards < 5 && s.consecutiveBoards !== selectedBoards)
         return false;
 
       // Sector filter
@@ -152,7 +152,16 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
     });
   }, [dragonTiger, dragonTigerFilter, searchQuery]);
 
-  // Group stocks by consecutive board count for Ladder view
+  // Distinct ladder levels present in filtered stocks
+  const distinctBoardLevels = useMemo(() => {
+    const levels = new Set<number>();
+    for (const stock of filteredStocks) {
+      levels.add(stock.consecutiveBoards);
+    }
+    return Array.from(levels).sort((a, b) => b - a);
+  }, [filteredStocks]);
+
+  // Group stocks by exact consecutive board count for Ladder view
   const ladderGroups = useMemo(() => {
     const map = new Map<number, LimitUpStock[]>();
     // Sort stocks descending by consecutiveBoards, then by sealAmount
@@ -164,7 +173,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
     });
 
     for (const stock of sorted) {
-      const b = stock.consecutiveBoards >= 4 ? 4 : stock.consecutiveBoards;
+      const b = stock.consecutiveBoards;
       const list = map.get(b) || [];
       list.push(stock);
       map.set(b, list);
@@ -378,11 +387,12 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
           <div className="flex flex-wrap items-center gap-2">
             {/* Consecutive boards filter pills for Ladder */}
             {activeTab === 'ladder' && (
-              <div className="flex items-center bg-[#101622] p-0.5 rounded-md border border-[#1e293b] text-xs">
+              <div className="flex items-center bg-[#101622] p-0.5 rounded-md border border-[#1e293b] text-xs overflow-x-auto">
                 {[
                   { label: `全部 (${stocks.length})`, val: 0 },
                   { label: `🔥 连板股 (${stocks.filter((s) => s.consecutiveBoards >= 2).length})`, val: 99 },
-                  { label: `高标≥4板 (${stocks.filter((s) => s.consecutiveBoards >= 4).length})`, val: 4 },
+                  { label: `高标≥5板 (${stocks.filter((s) => s.consecutiveBoards >= 5).length})`, val: 5 },
+                  { label: `4板 (${stocks.filter((s) => s.consecutiveBoards === 4).length})`, val: 4 },
                   { label: `3板 (${stocks.filter((s) => s.consecutiveBoards === 3).length})`, val: 3 },
                   { label: `2板 (${stocks.filter((s) => s.consecutiveBoards === 2).length})`, val: 2 },
                   { label: `首板 (${stocks.filter((s) => s.consecutiveBoards === 1).length})`, val: 1 },
@@ -501,19 +511,21 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                     </div>
                   )}
 
-                  {/* Render Ladder Levels */}
-                  {[4, 3, 2, 1].map((level) => {
+                  {/* Render Ladder Levels Dynamically */}
+                  {distinctBoardLevels.map((level) => {
                     const groupStocks = ladderGroups.get(level) || [];
                     if (groupStocks.length === 0) return null;
 
                     const levelTitle =
-                      level === 4
-                        ? '🏆 高标空间梯队 (≥4连板 龙头总决选)'
+                      level >= 5
+                        ? `👑 ${level}连板 · 空间高度总龙 (全市场空间标杆)`
+                        : level === 4
+                        ? '🏆 4连板 · 高标龙头梯队 (核心主升突破)'
                         : level === 3
-                        ? '🔥 3连板 强势加速梯队 (中位晋级)'
+                        ? '🔥 3连板 · 强势加速梯队 (中位晋级加速)'
                         : level === 2
-                        ? '⚡ 2连板 题材发酵梯队 (强弱分化)'
-                        : '🌱 1板 首板先锋挖掘 (新催化启动)';
+                        ? '⚡ 2连板 · 题材接力梯队 (强弱分化确认)'
+                        : '🌱 1板 · 首板先锋挖掘 (日内新催化启动)';
 
                     return (
                       <div key={level} className="space-y-3">
@@ -522,8 +534,10 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                           <div className="flex items-center gap-2">
                             <span
                               className={`w-2.5 h-2.5 rounded-full ${
-                                level === 4
+                                level >= 5
                                   ? 'bg-red-500 animate-ping'
+                                  : level === 4
+                                  ? 'bg-rose-500'
                                   : level === 3
                                   ? 'bg-orange-500'
                                   : level === 2
@@ -546,10 +560,14 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                             <div
                               key={stock.code}
                               className={`bg-[#0e141d] border rounded-xl p-4 transition-all duration-200 hover:border-[#d4a038]/60 hover:shadow-lg hover:shadow-black/40 flex flex-col justify-between space-y-3 relative group ${
-                                stock.consecutiveBoards >= 4
-                                  ? 'border-red-500/40 bg-gradient-to-br from-[#181115] to-[#0e141d]'
+                                stock.consecutiveBoards >= 5
+                                  ? 'border-red-500/60 bg-gradient-to-br from-[#221016] via-[#140e15] to-[#0e141d] shadow-md shadow-red-950/40'
+                                  : stock.consecutiveBoards === 4
+                                  ? 'border-rose-500/40 bg-gradient-to-br from-[#181115] to-[#0e141d]'
                                   : stock.consecutiveBoards === 3
                                   ? 'border-orange-500/30'
+                                  : stock.consecutiveBoards === 2
+                                  ? 'border-amber-500/30'
                                   : 'border-[#1e293b]'
                               }`}
                             >

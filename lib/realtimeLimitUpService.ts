@@ -136,19 +136,19 @@ async function fetchRealLimitUpStocks(): Promise<LimitUpStock[]> {
 
     if (limitUps.length === 0) return [];
 
-    // Parallel fetch Tencent K-lines for top limit up stocks to calculate real consecutive boards
-    const batchPromises = limitUps.slice(0, 40).map(async (item: any) => {
+    // Parallel fetch Tencent K-lines for all limit up stocks to calculate exact real consecutive boards
+    const batchPromises = limitUps.map(async (item: any) => {
       const code = String(item.code || '').padStart(6, '0');
       const fullCode = (code.startsWith('6') || code.startsWith('9') ? 'sh' : 'sz') + code;
       const is20cm = code.startsWith('30') || code.startsWith('68');
       const is30cm = code.startsWith('92') || code.startsWith('8') || code.startsWith('4');
-      const threshold = is30cm ? 28.5 : is20cm ? 19.2 : 9.5;
+      const threshold = is30cm ? 28.5 : is20cm ? 19.0 : 9.5;
 
       let boards = 1;
       try {
-        const qfqUrl = `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${fullCode},day,,,12,qfq`;
+        const qfqUrl = `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${fullCode},day,,,15,qfq`;
         const ctl = new AbortController();
-        const tm = setTimeout(() => ctl.abort(), 1200);
+        const tm = setTimeout(() => ctl.abort(), 2000);
 
         const kr = await fetch(qfqUrl, {
           signal: ctl.signal,
@@ -160,18 +160,22 @@ async function fetchRealLimitUpStocks(): Promise<LimitUpStock[]> {
           const kj = await kr.json();
           const kdata = kj?.data?.[fullCode]?.qfqday || kj?.data?.[fullCode]?.day || [];
 
-          for (let idx = kdata.length - 2; idx >= 0; idx--) {
-            const d = kdata[idx];
+          let count = 0;
+          for (let idx = kdata.length - 1; idx >= 1; idx--) {
+            const curr = kdata[idx];
             const prev = kdata[idx - 1];
             if (!prev) break;
-            const close = parseFloat(d[2]);
+            const close = parseFloat(curr[2]);
             const prevClose = parseFloat(prev[2]);
             const pct = ((close - prevClose) / prevClose) * 100;
             if (pct >= threshold) {
-              boards++;
+              count++;
             } else {
               break;
             }
+          }
+          if (count > 0) {
+            boards = count;
           }
         }
       } catch {
@@ -190,7 +194,11 @@ async function fetchRealLimitUpStocks(): Promise<LimitUpStock[]> {
 
       const subConcepts = [
         is30cm ? '北交所30cm' : is20cm ? (code.startsWith('30') ? '创业板20cm' : '科创板20cm') : '主板10cm',
-        boards >= 4 ? '高位空间总龙' : boards >= 2 ? `${boards}连板接力加速` : '首板涨停先锋',
+        boards >= 4
+          ? `高位空间总龙 (${boards}连板)`
+          : boards >= 2
+          ? `${boards}连板接力加速`
+          : '首板涨停先锋',
       ];
 
       return {
@@ -213,12 +221,14 @@ async function fetchRealLimitUpStocks(): Promise<LimitUpStock[]> {
         turnoverRate,
         marketCap,
         reason:
-          boards >= 3
-            ? `市场核心高标空间龙，获主力游资与机构深度加持，连续${boards}连板强势拓宽短线高度。`
+          boards >= 4
+            ? `市场核心高标空间总龙(${boards}连板)，获主力游资与机构资金强力顶板锁仓，主升浪开拓全市场短线高度！`
+            : boards === 3
+            ? `3连板强势加速晋级，突破中位分水岭，板块内聚集极高市场辨识度。`
             : boards === 2
-            ? '板块主线核心加速，日内换手坚决封板，资金承接极强。'
-            : '日内涨停先锋，早盘放量封板，主力资金净流入明显。',
-        dragonTigerType: boards >= 3 ? '顶级游资 + 机构重仓' : '知名游资 + 量化买入',
+            ? `2连板确认题材主线发酵，日内换手坚决封死涨停，梯队承接力强。`
+            : '首板涨停先锋，早盘放量封板，主力资金净流入明显。',
+        dragonTigerType: boards >= 4 ? '顶级游资强顶板 + 机构深度重仓' : boards >= 2 ? '知名游资加速 + 机构合力买入' : '活跃游资 + 量化买入',
         netBuyAmount: Math.round(turnover * (0.06 + Math.min(0.15, boards * 0.02))),
         isBroken: false,
         openCount: 0,
