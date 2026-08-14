@@ -728,7 +728,8 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                       <div className="text-right">
                         <div className="text-xs text-slate-500">今日上榜净买额</div>
                         <div className="text-base font-bold font-mono text-red-400">
-                          +{formatMoney(seat.netBuyTotal)}
+                          {((seat.netBuyTotal ?? seat.netBuyAmount ?? 0) >= 0 ? '+' : '') +
+                            formatMoney(seat.netBuyTotal ?? seat.netBuyAmount ?? 0)}
                         </div>
                       </div>
                     </div>
@@ -740,13 +741,28 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                           <tr className="text-slate-500 border-b border-[#182230]">
                             <th className="pb-2 font-medium">标的</th>
                             <th className="pb-2 font-medium">连板高度</th>
-                            <th className="pb-2 font-medium text-right">买入额</th>
+                            <th className="pb-2 font-medium text-right">买入/成交额</th>
                             <th className="pb-2 font-medium text-right">净买额</th>
                             <th className="pb-2 font-medium text-center">操作</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#182230]">
-                          {seat.stocksTraded.map((stk) => (
+                          {(seat.stocksTraded && seat.stocksTraded.length > 0
+                            ? seat.stocksTraded
+                            : seat.code
+                            ? [
+                                {
+                                  code: seat.code,
+                                  name: seat.name || `标的${seat.code}`,
+                                  buyAmount: seat.totalAmount || seat.netBuyAmount || 0,
+                                  sellAmount: 0,
+                                  netAmount: seat.netBuyAmount || 0,
+                                  consecutiveBoards: seat.consecutiveBoards || 1,
+                                  boardText: seat.boardText || '上榜',
+                                },
+                              ]
+                            : []
+                          ).map((stk) => (
                             <tr key={stk.code} className="hover:bg-[#121924]">
                               <td className="py-2.5">
                                 <div className="font-bold text-slate-200">

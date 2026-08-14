@@ -252,25 +252,52 @@ export interface LimitUpStock {
 }
 
 export interface SectorLimitUpGroup {
+  sectorId?: string;
   sectorName: string;
   sectorChangePercent: number;
   limitUpCount: number;
+  totalTurnover?: number;
   leaderStock: {
     code: string;
     name: string;
+    changePercent?: number;
     consecutiveBoards: number;
     boardText: string;
   };
   stocks: LimitUpStock[];
-  catalyst: string;
+  catalyst?: string;
 }
 
 export interface DragonTigerSeat {
-  seatName: string;
-  seatType: 'institution' | 'hot_money' | 'northbound';
-  netBuyTotal: number;
+  code?: string;
+  name?: string;
+  tradeDate?: string;
+  reason?: string;
+  price?: number;
+  changePercent?: number;
+  consecutiveBoards?: number;
+  boardText?: string;
+  netBuyAmount?: number;
+  totalAmount?: number;
+  topBuyers?: {
+    seatName: string;
+    seatType: string;
+    buyAmount: number;
+    sellAmount: number;
+    netAmount: number;
+  }[];
+  topSellers?: {
+    seatName: string;
+    seatType: string;
+    buyAmount: number;
+    sellAmount: number;
+    netAmount: number;
+  }[];
+  seatName?: string;
+  seatType?: 'institution' | 'hot_money' | 'northbound' | string;
+  netBuyTotal?: number;
   winRate30d?: number; // 30天胜率
-  stocksTraded: {
+  stocksTraded?: {
     code: string;
     name: string;
     buyAmount: number;
@@ -282,14 +309,19 @@ export interface DragonTigerSeat {
 }
 
 export interface LimitUpLadderSummary {
-  date: string;
+  date?: string;
+  tradeDate?: string;
   totalLimitUp: number;
   totalLimitDown: number;
   brokenCount: number;
   sealSuccessRate: number;
-  ladderDistribution: Record<number, number>; // { 7: 1, 5: 2, 4: 3, 3: 5, 2: 8, 1: 26 }
-  yesterdayLimitUpReturn: number;
-  marketSentimentScore: number;
+  ladderDistribution?: Record<number | string, number>;
+  yesterdayLimitUpReturn?: number;
+  yesterdayPremium?: number;
+  marketSentimentScore?: number;
+  sentimentScore?: number;
   sentimentPhase: string;
+  topDragonStock?: string;
+  maxConsecutiveBoards?: number;
 }
 
