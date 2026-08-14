@@ -86,7 +86,7 @@ export function formatBeijingDateStr(d: Date): string {
  */
 export function generateMockKline(
   basePrice = 100,
-  count = 120,
+  count = 360,
   period = 'day',
   volatility = 0.02
 ): KlinePoint[] {

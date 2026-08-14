@@ -1,4 +1,18 @@
-import { KlinePoint, MAValues, MACDValues, RSIValues, BOLLValues, KDJValues, SupportResistanceLevel, Trendline } from '../src/types';
+import {
+  KlinePoint,
+  MAValues,
+  MACDValues,
+  RSIValues,
+  BOLLValues,
+  KDJValues,
+  SupportResistanceLevel,
+  Trendline,
+  VReversal,
+  HighlightBox,
+  TrianglePattern,
+  ChannelLines,
+  TradePlanLevels,
+} from '../src/types';
 
 /**
  * Calculate Simple Moving Average (MA)
@@ -400,4 +414,333 @@ export function detectTrendlines(data: KlinePoint[]): Trendline[] {
   }
 
   return lines;
+}
+
+/**
+ * Detect Converging/Channel Trendlines (Yellow/Lime glowing channel as seen in professional chart)
+ */
+export function detectChannelWedge(data: KlinePoint[]): ChannelLines {
+  if (data.length < 25) {
+    return { upper: null, lower: null };
+  }
+
+  const lookback = Math.min(75, data.length);
+  const subset = data.slice(-lookback);
+  const offset = data.length - lookback;
+
+  const peaks: { index: number; price: number }[] = [];
+  const troughs: { index: number; price: number }[] = [];
+
+  for (let i = 2; i < subset.length - 2; i++) {
+    const cur = subset[i];
+    if (
+      cur.high >= subset[i - 1].high &&
+      cur.high >= subset[i - 2].high &&
+      cur.high >= subset[i + 1].high &&
+      cur.high >= subset[i + 2].high
+    ) {
+      peaks.push({ index: offset + i, price: cur.high });
+    }
+    if (
+      cur.low <= subset[i - 1].low &&
+      cur.low <= subset[i - 2].low &&
+      cur.low <= subset[i + 1].low &&
+      cur.low <= subset[i + 2].low
+    ) {
+      troughs.push({ index: offset + i, price: cur.low });
+    }
+  }
+
+  let upper: ChannelLines['upper'] = null;
+  let lower: ChannelLines['lower'] = null;
+
+  // Upper trendline (Connecting 2 highest distinctive peaks or early peak to recent peak)
+  if (peaks.length >= 2) {
+    // Pick the most prominent two peaks separated by at least 6 bars
+    let p1 = peaks[0];
+    let p2 = peaks[peaks.length - 1];
+
+    if (peaks.length >= 3) {
+      // Find absolute highest peak in the lookback
+      let maxPeak = peaks[0];
+      for (const p of peaks) {
+        if (p.price > maxPeak.price) maxPeak = p;
+      }
+      p1 = maxPeak;
+      // find a later peak or previous peak
+      const otherPeaks = peaks.filter((p) => Math.abs(p.index - p1.index) >= 8);
+      if (otherPeaks.length > 0) {
+        p2 = otherPeaks[otherPeaks.length - 1];
+      }
+    }
+
+    if (p1.index > p2.index) {
+      const temp = p1;
+      p1 = p2;
+      p2 = temp;
+    }
+
+    if (p2.index > p1.index + 5) {
+      const slope = (p2.price - p1.price) / (p2.index - p1.index);
+      const extendBars = Math.min(15, Math.floor(lookback * 0.2));
+      const targetIndex = Math.min(data.length + extendBars, data.length + 8);
+      const endPrice = Number((p1.price + slope * (targetIndex - p1.index)).toFixed(2));
+      upper = {
+        startIndex: p1.index,
+        endIndex: targetIndex,
+        startPrice: p1.price,
+        endPrice,
+      };
+    }
+  }
+
+  // Lower trendline (Connecting 2 prominent troughs)
+  if (troughs.length >= 2) {
+    let t1 = troughs[0];
+    let t2 = troughs[troughs.length - 1];
+
+    if (troughs.length >= 3) {
+      let minTrough = troughs[0];
+      for (const t of troughs) {
+        if (t.price < minTrough.price) minTrough = t;
+      }
+      t1 = minTrough;
+      const otherTroughs = troughs.filter((t) => Math.abs(t.index - t1.index) >= 8);
+      if (otherTroughs.length > 0) {
+        t2 = otherTroughs[otherTroughs.length - 1];
+      }
+    }
+
+    if (t1.index > t2.index) {
+      const temp = t1;
+      t1 = t2;
+      t2 = temp;
+    }
+
+    if (t2.index > t1.index + 5) {
+      const slope = (t2.price - t1.price) / (t2.index - t1.index);
+      const extendBars = Math.min(15, Math.floor(lookback * 0.2));
+      const targetIndex = Math.min(data.length + extendBars, data.length + 8);
+      const endPrice = Number((t1.price + slope * (targetIndex - t1.index)).toFixed(2));
+      lower = {
+        startIndex: t1.index,
+        endIndex: targetIndex,
+        startPrice: t1.price,
+        endPrice,
+      };
+    }
+  }
+
+  return { upper, lower };
+}
+
+/**
+ * Detect V-shape reversal turning points (V形反转)
+ */
+export function detectVReversals(data: KlinePoint[]): VReversal[] {
+  if (data.length < 20) return [];
+  const reversals: VReversal[] = [];
+  const lookback = Math.min(80, data.length);
+  const subset = data.slice(-lookback);
+  const offset = data.length - lookback;
+
+  // Search for sharp top peaks (V-Top reversal)
+  for (let i = 4; i < subset.length - 4; i++) {
+    const cur = subset[i];
+    const leftSlope = (cur.high - subset[i - 3].low) / 3;
+    const rightSlope = (cur.high - subset[i + 3].low) / 3;
+    const isPeak =
+      cur.high > subset[i - 1].high &&
+      cur.high > subset[i - 2].high &&
+      cur.high > subset[i + 1].high &&
+      cur.high > subset[i + 2].high;
+
+    // Check if it represents a sharp V-turn
+    if (isPeak && leftSlope > 0 && rightSlope > 0) {
+      const avgPrice = cur.close;
+      const height = cur.high - Math.min(subset[i - 3].low, subset[i + 3].low);
+      if (height / avgPrice > 0.025) {
+        reversals.push({
+          index: offset + i,
+          price: cur.high,
+          type: 'top',
+          label: 'V 形反转',
+        });
+      }
+    }
+  }
+
+  // Pick the most distinct top reversal
+  return reversals.slice(-2);
+}
+
+/**
+ * Detect Triangle / Wedge convergence pattern with translucent polygon fill
+ */
+export function detectTrianglePattern(data: KlinePoint[]): TrianglePattern | null {
+  if (data.length < 25) return null;
+  const lookback = Math.min(45, data.length);
+  const subset = data.slice(-lookback);
+  const offset = data.length - lookback;
+
+  // Find the highest point and key swing points within the last 40 bars
+  let highestIdx = 0;
+  let lowestIdx = 0;
+  for (let i = 0; i < subset.length; i++) {
+    if (subset[i].high > subset[highestIdx].high) highestIdx = i;
+    if (subset[i].low < subset[lowestIdx].low) lowestIdx = i;
+  }
+
+  if (highestIdx < subset.length - 6) {
+    const p1 = { index: offset + highestIdx, price: subset[highestIdx].high };
+    // Find local trough after highest peak
+    let midTroughIdx = highestIdx + 1;
+    for (let i = highestIdx + 1; i < subset.length; i++) {
+      if (subset[i].low < subset[midTroughIdx].low) midTroughIdx = i;
+    }
+    const p2 = { index: offset + midTroughIdx, price: subset[midTroughIdx].low };
+
+    // Find recent apex or end bar
+    const p3 = {
+      index: data.length - 1,
+      price: Number(((p1.price + p2.price) / 2).toFixed(2)),
+    };
+
+    return {
+      p1,
+      p2,
+      p3,
+      p4: { index: data.length - 1, price: subset[subset.length - 1].close },
+      label: '收敛形态',
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Detect Key Congestion / Breakout / Consolidation Highlight Boxes
+ */
+export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
+  if (data.length < 25) return [];
+  const boxes: HighlightBox[] = [];
+  const lookback = Math.min(70, data.length);
+  const subset = data.slice(-lookback);
+  const offset = data.length - lookback;
+
+  // 1. Top cluster / rejection box (Orange Box around recent high consolidation)
+  let maxHighIdx = 0;
+  for (let i = 0; i < subset.length; i++) {
+    if (subset[i].high > subset[maxHighIdx].high) maxHighIdx = i;
+  }
+
+  if (maxHighIdx >= 2 && maxHighIdx <= subset.length - 2) {
+    const start = Math.max(0, maxHighIdx - 2);
+    const end = Math.min(subset.length - 1, maxHighIdx + 2);
+    let boxMin = subset[start].low;
+    let boxMax = subset[start].high;
+    for (let k = start; k <= end; k++) {
+      if (subset[k].low < boxMin) boxMin = subset[k].low;
+      if (subset[k].high > boxMax) boxMax = subset[k].high;
+    }
+
+    boxes.push({
+      startIdx: offset + start,
+      endIdx: offset + end,
+      minPrice: Number(boxMin.toFixed(2)),
+      maxPrice: Number(boxMax.toFixed(2)),
+      type: 'top',
+      color: 'rgba(245, 158, 11, 0.18)',
+      borderColor: '#f59e0b',
+      label: '高位承压区',
+    });
+  }
+
+  // 2. Base / Support consolidation box (Blue Box around low consolidation)
+  let minLowIdx = 0;
+  for (let i = 0; i < subset.length; i++) {
+    if (subset[i].low < subset[minLowIdx].low) minLowIdx = i;
+  }
+
+  if (minLowIdx >= 1 && minLowIdx <= subset.length - 2 && Math.abs(minLowIdx - maxHighIdx) >= 4) {
+    const start = Math.max(0, minLowIdx - 2);
+    const end = Math.min(subset.length - 1, minLowIdx + 2);
+    let boxMin = subset[start].low;
+    let boxMax = subset[start].high;
+    for (let k = start; k <= end; k++) {
+      if (subset[k].low < boxMin) boxMin = subset[k].low;
+      if (subset[k].high > boxMax) boxMax = subset[k].high;
+    }
+
+    boxes.push({
+      startIdx: offset + start,
+      endIdx: offset + end,
+      minPrice: Number(boxMin.toFixed(2)),
+      maxPrice: Number(boxMax.toFixed(2)),
+      type: 'bottom',
+      color: 'rgba(59, 130, 246, 0.18)',
+      borderColor: '#3b82f6',
+      label: '支撑筑底区',
+    });
+  }
+
+  return boxes;
+}
+
+/**
+ * Detect Smart Trade Plan Levels (止损, 入场, 止盈)
+ */
+export function detectTradePlan(data: KlinePoint[], currentPrice?: number): TradePlanLevels {
+  const cur = currentPrice || (data.length > 0 ? data[data.length - 1].close : 10);
+  const lookback = Math.min(30, data.length);
+  const subset = data.slice(-lookback);
+
+  let high = cur;
+  let low = cur;
+  for (const p of subset) {
+    if (p.high > high) high = p.high;
+    if (p.low < low) low = p.low;
+  }
+
+  // Estimate volatility range
+  const range = Math.max(cur * 0.03, high - low);
+  const isBull = data.length >= 20 ? data[data.length - 1].close >= data[data.length - 10].close : true;
+
+  if (isBull) {
+    const entry = Number(cur.toFixed(2));
+    const stopLoss = Number(Math.max(low * 0.98, cur - range * 0.4).toFixed(2));
+    const takeProfit = Number((cur + (cur - stopLoss) * 1.6).toFixed(2));
+    const risk = Math.max(0.01, cur - stopLoss);
+    const reward = Math.max(0.01, takeProfit - cur);
+    const rr = Number((reward / risk).toFixed(1));
+
+    return {
+      direction: 'bull',
+      entry,
+      stopLoss,
+      takeProfit,
+      riskRewardRatio: rr,
+      entryZone: [entry - range * 0.05, entry + range * 0.05],
+      stopZone: [stopLoss, entry],
+      targetZone: [entry, takeProfit],
+    };
+  } else {
+    const entry = Number(cur.toFixed(2));
+    const stopLoss = Number(Math.min(high * 1.02, cur + range * 0.4).toFixed(2));
+    const takeProfit = Number((cur - (stopLoss - cur) * 1.6).toFixed(2));
+    const risk = Math.max(0.01, stopLoss - cur);
+    const reward = Math.max(0.01, cur - takeProfit);
+    const rr = Number((reward / risk).toFixed(1));
+
+    return {
+      direction: 'bear',
+      entry,
+      stopLoss,
+      takeProfit,
+      riskRewardRatio: rr,
+      entryZone: [entry - range * 0.05, entry + range * 0.05],
+      stopZone: [entry, stopLoss],
+      targetZone: [takeProfit, entry],
+    };
+  }
 }

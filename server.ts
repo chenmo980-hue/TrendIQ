@@ -212,54 +212,109 @@ async function startServer() {
       // fallback
     }
 
-    // 2. High-speed Live K-line fetching via Sina Finance API
+    // 2. High-speed Live K-line fetching with QFQ (Forward-adjusted / 前复权) support
     try {
-      let scale = '240';
-      if (period === '1m' || period === '5m') scale = '5';
-      else if (period === '15m') scale = '15';
-      else if (period === '30m' || period === '90m') scale = '30';
-      else if (period === '60m' || period === '120m') scale = '60';
+      // For Day/Week/Month, fetch authentic QFQ (前复权) K-lines matching Flush / TongDaXin
+      if (period === 'day' || period === 'week' || period === 'month') {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const pParam = period === 'day' ? 'day' : period;
+        const qfqUrl = `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${norm.fullCode},${pParam},,,500,qfq`;
 
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3500);
-      const count = 160;
-      const sinaKlineUrl = `https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=${norm.fullCode}&scale=${scale}&ma=no&datalen=${count}`;
+        const qfqResp = await fetch(qfqUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': 'https://finance.qq.com',
+          },
+        });
+        clearTimeout(timer);
 
-      const kResp = await fetch(sinaKlineUrl, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-          'Referer': 'https://finance.sina.com.cn',
-        },
-      });
-      clearTimeout(timer);
+        if (qfqResp.ok) {
+          const rawJson = await qfqResp.json();
+          const stockObj = rawJson.data?.[norm.fullCode];
+          const list =
+            stockObj?.qfqday ||
+            stockObj?.[`qfq${pParam}`] ||
+            stockObj?.[pParam] ||
+            stockObj?.day ||
+            [];
+          if (Array.isArray(list) && list.length > 0) {
+            klineData = list.map((item: any) => {
+              // item format: [date, open, close, high, low, volume(lots/手)]
+              const time = String(item[0] || '');
+              const open = parseFloat(item[1]) || 0;
+              const close = parseFloat(item[2]) || 0;
+              const high = parseFloat(item[3]) || Math.max(open, close);
+              const low = parseFloat(item[4]) || Math.min(open, close);
+              const rawVolLots = parseFloat(item[5]) || 0;
+              // Convert 手 (lots, 100 shares) to 股 (shares) so all candles share identical units
+              const volume = rawVolLots * 100;
+              const turnover = volume * close;
 
-      if (kResp.ok) {
-        const rawList = await kResp.json();
-        if (Array.isArray(rawList) && rawList.length > 0) {
-          klineData = rawList.map((item: any) => {
-            const time = String(item.day || '');
-            const open = parseFloat(item.open) || 0;
-            const close = parseFloat(item.close) || 0;
-            const high = parseFloat(item.high) || Math.max(open, close);
-            const low = parseFloat(item.low) || Math.min(open, close);
-            const volume = parseFloat(item.volume) || 0;
-            const turnover = volume * close;
+              return {
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                turnover,
+              };
+            });
+          }
+        }
+      }
 
-            return {
-              time,
-              open,
-              high,
-              low,
-              close,
-              volume,
-              turnover,
-            };
-          });
+      // If still empty (e.g. minute period or fallback), fetch Sina Kline
+      if (!klineData || klineData.length === 0) {
+        let scale = '240';
+        if (period === '1m' || period === '5m') scale = '5';
+        else if (period === '15m') scale = '15';
+        else if (period === '30m' || period === '90m') scale = '30';
+        else if (period === '60m' || period === '120m') scale = '60';
 
-          // Handle 90m and 120m synthesis
-          if (period === '90m' || period === '120m') {
-            klineData = aggregateMinuteKline(klineData, period);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3500);
+        const count = period === 'day' ? 360 : 180;
+        const sinaKlineUrl = `https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol=${norm.fullCode}&scale=${scale}&ma=no&datalen=${count}`;
+
+        const kResp = await fetch(sinaKlineUrl, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Referer': 'https://finance.sina.com.cn',
+          },
+        });
+        clearTimeout(timer);
+
+        if (kResp.ok) {
+          const rawList = await kResp.json();
+          if (Array.isArray(rawList) && rawList.length > 0) {
+            klineData = rawList.map((item: any) => {
+              const time = String(item.day || '');
+              const open = parseFloat(item.open) || 0;
+              const close = parseFloat(item.close) || 0;
+              const high = parseFloat(item.high) || Math.max(open, close);
+              const low = parseFloat(item.low) || Math.min(open, close);
+              const volume = parseFloat(item.volume) || 0;
+              const turnover = volume * close;
+
+              return {
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                turnover,
+              };
+            });
+
+            // Handle 90m and 120m synthesis
+            if (period === '90m' || period === '120m') {
+              klineData = aggregateMinuteKline(klineData, period);
+            }
           }
         }
       }
@@ -308,7 +363,7 @@ async function startServer() {
     }
 
     if (!klineData || klineData.length < 10) {
-      klineData = generateMockKline(quote.price, 120, period);
+      klineData = generateMockKline(quote.price, period === 'day' ? 360 : 180, period);
     } else if (period === 'day' && quote) {
       const todayStr = formatBeijingDateStr(getBeijingDate());
       const lastItem = klineData[klineData.length - 1];

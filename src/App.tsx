@@ -13,6 +13,22 @@ import {
 } from './types';
 import { formatPrice } from '../lib/stockCode';
 import { generateTechnicalJudgment } from '../lib/judgment';
+import { Clock, RotateCcw } from 'lucide-react';
+
+interface FrequentStock {
+  code: string;
+  name: string;
+  count: number;
+  lastViewed: number;
+}
+
+const DEFAULT_FREQUENT_STOCKS: FrequentStock[] = [
+  { name: '贵州茅台', code: '600519', count: 10, lastViewed: Date.now() - 1000 },
+  { name: '宁德时代', code: '300750', count: 8, lastViewed: Date.now() - 2000 },
+  { name: '东方财富', code: '300059', count: 6, lastViewed: Date.now() - 3000 },
+  { name: '中芯国际', code: '688981', count: 4, lastViewed: Date.now() - 4000 },
+  { name: '比亚迪',   code: '002594', count: 2, lastViewed: Date.now() - 5000 },
+];
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'indicator' | 'image'>('indicator');
@@ -28,13 +44,61 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Quick view sample stock list
-  const quickStocks = [
-    { name: '贵州茅台', code: '600519' },
-    { name: '平安银行', code: '000001' },
-    { name: '宁德时代', code: '300750' },
-    { name: '中国平安', code: '601318' },
-  ];
+  // Dynamic frequently viewed stocks stored in localStorage
+  const [frequentStocks, setFrequentStocks] = useState<FrequentStock[]>(() => {
+    try {
+      const saved = localStorage.getItem('trendiq_frequent_stocks');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {
+      // fallback
+    }
+    return DEFAULT_FREQUENT_STOCKS;
+  });
+
+  // Track stock visit count and timestamp dynamically
+  const recordStockVisit = useCallback((code: string, name: string) => {
+    if (!code) return;
+    setFrequentStocks((prev) => {
+      const list = [...prev];
+      const idx = list.findIndex((item) => item.code === code);
+      if (idx >= 0) {
+        list[idx] = {
+          ...list[idx],
+          name: name && !name.startsWith('标的') ? name : list[idx].name,
+          count: (list[idx].count || 0) + 1,
+          lastViewed: Date.now(),
+        };
+      } else {
+        list.push({
+          code,
+          name: name || code,
+          count: 1,
+          lastViewed: Date.now(),
+        });
+      }
+
+      // Sort by frequency count (descending), and recency
+      list.sort((a, b) => {
+        if (b.count !== a.count) {
+          return b.count - a.count;
+        }
+        return b.lastViewed - a.lastViewed;
+      });
+
+      const trimmed = list.slice(0, 8);
+      try {
+        localStorage.setItem('trendiq_frequent_stocks', JSON.stringify(trimmed));
+      } catch {
+        // ignore
+      }
+      return trimmed;
+    });
+  }, []);
 
   // 1. Fetch Market Overview Indices
   const loadMarketIndices = useCallback(async () => {
@@ -75,6 +139,11 @@ export default function App() {
 
       setQuote(data.quote);
       setKlineData(data.klineData || []);
+
+      // Record stock visit to dynamic frequently-viewed list
+      if (data.quote) {
+        recordStockVisit(data.quote.code, data.quote.name);
+      }
 
       // Calculate rule-based technical judgment
       if (data.quote && data.klineData && data.klineData.length > 0) {
@@ -176,23 +245,40 @@ export default function App() {
                 </button>
               </form>
 
-              {/* Quick View tags matching screenshot */}
-              <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
-                <span>快速查看:</span>
+              {/* Dynamic Frequently / Recently Viewed Stocks */}
+              <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5 flex-wrap">
+                <div className="flex items-center gap-1.5 text-slate-300 font-medium shrink-0">
+                  <Clock className="w-3.5 h-3.5 text-[#d4a038]" />
+                  <span>常看标的:</span>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {quickStocks.map((s) => (
+                  {frequentStocks.map((s) => (
                     <button
                       key={s.code}
                       onClick={() => handleSelectStock(s.code)}
-                      className={`px-3 py-1 rounded-full border transition text-xs cursor-pointer ${
+                      title={`常看次数: ${s.count} 次 | 代码: ${s.code}`}
+                      className={`px-3 py-1 rounded-full border transition text-xs cursor-pointer flex items-center gap-1.5 ${
                         currentCode === s.code
-                          ? 'bg-[#1a2330] border-[#d4a038]/70 text-[#d4a038] font-semibold'
+                          ? 'bg-[#1a2330] border-[#d4a038]/70 text-[#d4a038] font-semibold shadow-sm'
                           : 'bg-[#10161f] border-[#1d2733] text-slate-300 hover:border-slate-600 hover:text-white'
                       }`}
                     >
-                      {s.name}
+                      <span>{s.name}</span>
+                      <span className="text-[10px] font-mono opacity-60">{s.code}</span>
                     </button>
                   ))}
+                  {frequentStocks.length > 0 && (
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem('trendiq_frequent_stocks');
+                        setFrequentStocks(DEFAULT_FREQUENT_STOCKS);
+                      }}
+                      title="重置常看记录"
+                      className="p-1 hover:bg-[#151e2a] text-slate-500 hover:text-slate-300 rounded transition cursor-pointer ml-1"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

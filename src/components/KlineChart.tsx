@@ -9,6 +9,11 @@ import {
   SupportResistanceLevel,
   Trendline,
   KlinePeriod,
+  VReversal,
+  HighlightBox,
+  TrianglePattern,
+  ChannelLines,
+  TradePlanLevels,
 } from '../types';
 import { formatPrice, formatVolume } from '../../lib/stockCode';
 import {
@@ -19,8 +24,13 @@ import {
   calculateKDJ,
   detectSupportResistance,
   detectTrendlines,
+  detectChannelWedge,
+  detectVReversals,
+  detectTrianglePattern,
+  detectHighlightBoxes,
+  detectTradePlan,
 } from '../../lib/indicators';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, TrendingUp, Layers, Square, Crosshair, Target } from 'lucide-react';
 
 interface KlineChartProps {
   data: KlinePoint[];
@@ -74,7 +84,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
-  // Indicator Visibility Toggles
+  // Indicator & Trendline Visibility Toggles
   const [showMA, setShowMA] = useState(true);
   const [activeMAs, setActiveMAs] = useState<Record<number, boolean>>({
     5: true,
@@ -83,12 +93,16 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     30: false,
     60: true,
     120: true,
-    250: false,
+    250: true,
   });
 
   const [showBOLL, setShowBOLL] = useState(false);
   const [showSupportResistance, setShowSupportResistance] = useState(true);
   const [showTrendlines, setShowTrendlines] = useState(true);
+  const [showChannelLines, setShowChannelLines] = useState(true);
+  const [showPatterns, setShowPatterns] = useState(true);
+  const [showBoxes, setShowBoxes] = useState(true);
+  const [showTradePlan, setShowTradePlan] = useState(true);
   const [subIndicator, setSubIndicator] = useState<'MACD' | 'RSI' | 'KDJ'>('MACD');
 
   // Reset offset to comfortable right-padded space (-12) on period or stock change
@@ -97,7 +111,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     setHoverIndex(null);
   }, [period, stockCode]);
 
-  // Precalculate technical indicators
+  // Precalculate technical indicators and patterns
   const mas = useMemo(() => calculateAllMA(data), [data]);
   const macd = useMemo(() => calculateMACD(data), [data]);
   const rsi = useMemo(() => calculateRSI(data), [data]);
@@ -105,14 +119,23 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const kdj = useMemo(() => calculateKDJ(data), [data]);
   const { supports, resistances } = useMemo(() => detectSupportResistance(data), [data]);
   const trendlines = useMemo(() => detectTrendlines(data), [data]);
+  const channelLines = useMemo(() => detectChannelWedge(data), [data]);
+  const vReversals = useMemo(() => detectVReversals(data), [data]);
+  const trianglePattern = useMemo(() => detectTrianglePattern(data), [data]);
+  const highlightBoxes = useMemo(() => detectHighlightBoxes(data), [data]);
 
   const total = data.length;
 
-  // Calculate active candle for HUD
+  // Calculate active candle for HUD & Trade Plan
   const activeIndex = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < total
     ? hoverIndex
     : total - 1;
   const activeCandle = data[activeIndex] || data[data.length - 1];
+
+  const tradePlan = useMemo(
+    () => detectTradePlan(data, activeCandle?.close),
+    [data, activeCandle?.close]
+  );
 
   const toggleMA = (periodNum: number) => {
     setActiveMAs((prev) => ({
@@ -267,44 +290,140 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     ctx.lineTo(padding.left + chartWidth, subY);
     ctx.stroke();
 
-    // 2. Draw Support & Resistance Horizontal Dashed Lines
+    // ----------------------------------------------------
+    // LAYER A: Trade Plan Background Shaded Zones (止盈/止损区域)
+    // ----------------------------------------------------
+    if (showTradePlan && tradePlan) {
+      const entryY = getPriceY(tradePlan.entry);
+      const stopY = getPriceY(tradePlan.stopLoss);
+      const tpY = getPriceY(tradePlan.takeProfit);
+
+      // Red Stop Loss Zone (Between entry and stop loss)
+      const stopMinY = Math.min(entryY, stopY);
+      const stopHeight = Math.abs(stopY - entryY);
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.10)';
+      ctx.fillRect(padding.left, stopMinY, chartWidth, stopHeight);
+
+      // Green Take Profit Zone (Between entry and take profit)
+      const tpMinY = Math.min(entryY, tpY);
+      const tpHeight = Math.abs(tpY - entryY);
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.10)';
+      ctx.fillRect(padding.left, tpMinY, chartWidth, tpHeight);
+    }
+
+    // ----------------------------------------------------
+    // LAYER B: Convergence Triangle / Wedge Pattern Fill (收敛三角半透明形态)
+    // ----------------------------------------------------
+    if (showPatterns && trianglePattern) {
+      const { p1, p2, p3, p4 } = trianglePattern;
+      const pts = [p1, p2, p3];
+      if (p4) pts.push(p4);
+
+      if (pts.length >= 3) {
+        ctx.beginPath();
+        ctx.moveTo(getX(pts[0].index), getPriceY(pts[0].price));
+        for (let pIdx = 1; pIdx < pts.length; pIdx++) {
+          ctx.lineTo(getX(pts[pIdx].index), getPriceY(pts[pIdx].price));
+        }
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.22)';
+        ctx.fill();
+
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+      }
+    }
+
+    // ----------------------------------------------------
+    // LAYER C: Highlight Boxes (形态框选 - 承压与筑底区域)
+    // ----------------------------------------------------
+    if (showBoxes && highlightBoxes.length > 0) {
+      for (const box of highlightBoxes) {
+        const x1 = getX(box.startIdx) - candleWidth * 0.6;
+        const x2 = getX(box.endIdx) + candleWidth * 0.6;
+        const yTop = getPriceY(box.maxPrice);
+        const yBot = getPriceY(box.minPrice);
+
+        const boxW = Math.max(12, x2 - x1);
+        const boxH = Math.max(10, yBot - yTop);
+
+        ctx.fillStyle = box.color;
+        ctx.fillRect(x1, yTop, boxW, boxH);
+
+        ctx.strokeStyle = box.borderColor;
+        ctx.lineWidth = 1.8;
+        ctx.strokeRect(x1, yTop, boxW, boxH);
+
+        // Optional label inside box
+        if (box.label) {
+          ctx.fillStyle = box.borderColor;
+          ctx.font = labelFont;
+          ctx.fillText(box.label, x1 + 6, yTop + 14);
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // LAYER D: S1 / R1 Key Horizontal Support & Resistance Bands
+    // ----------------------------------------------------
     if (showSupportResistance) {
       ctx.setLineDash([4, 4]);
-      // Supports (Emerald)
-      ctx.strokeStyle = 'rgba(34, 197, 94, 0.45)';
-      for (const sup of supports) {
+      // S1 (Support Cyan)
+      for (let sIdx = 0; sIdx < supports.length; sIdx++) {
+        const sup = supports[sIdx];
         if (sup >= paddedMinPrice && sup <= paddedMaxPrice) {
           const y = getPriceY(sup);
+          ctx.strokeStyle = sIdx === 0 ? 'rgba(6, 182, 212, 0.85)' : 'rgba(34, 197, 94, 0.45)';
+          ctx.lineWidth = sIdx === 0 ? 2 : 1;
           ctx.beginPath();
           ctx.moveTo(padding.left, y);
           ctx.lineTo(padding.left + chartWidth, y);
           ctx.stroke();
 
+          // S1 Badge
+          if (sIdx === 0) {
+            ctx.fillStyle = '#06b6d4';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText('S1', padding.left + 12, y - 4);
+          }
+
           ctx.font = labelFont;
-          ctx.fillStyle = '#22c55e';
+          ctx.fillStyle = sIdx === 0 ? '#06b6d4' : '#22c55e';
           ctx.fillText(`支撑 ${sup}`, padding.left + chartWidth + 4, y - 2);
         }
       }
 
-      // Resistances (Rose)
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.45)';
-      for (const res of resistances) {
+      // R1 (Resistance Rose)
+      for (let rIdx = 0; rIdx < resistances.length; rIdx++) {
+        const res = resistances[rIdx];
         if (res >= paddedMinPrice && res <= paddedMaxPrice) {
           const y = getPriceY(res);
+          ctx.strokeStyle = rIdx === 0 ? 'rgba(244, 63, 94, 0.85)' : 'rgba(239, 68, 68, 0.45)';
+          ctx.lineWidth = rIdx === 0 ? 2 : 1;
           ctx.beginPath();
           ctx.moveTo(padding.left, y);
           ctx.lineTo(padding.left + chartWidth, y);
           ctx.stroke();
 
+          // R1 Badge
+          if (rIdx === 0) {
+            ctx.fillStyle = '#f43f5e';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText('R1', padding.left + 12, y - 4);
+          }
+
           ctx.font = labelFont;
-          ctx.fillStyle = '#ef4444';
+          ctx.fillStyle = rIdx === 0 ? '#f43f5e' : '#ef4444';
           ctx.fillText(`阻力 ${res}`, padding.left + chartWidth + 4, y - 2);
         }
       }
       ctx.setLineDash([]);
     }
 
-    // 3. Draw Candlesticks and Volume Bars
+    // ----------------------------------------------------
+    // LAYER E: Draw Candlesticks and Volume Bars
+    // ----------------------------------------------------
     let highestCandle = { idx: renderStartIndex, price: -Infinity };
     let lowestCandle = { idx: renderStartIndex, price: Infinity };
 
@@ -368,7 +487,9 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       }
     }
 
-    // 4. Draw Bollinger Bands
+    // ----------------------------------------------------
+    // LAYER F: Bollinger Bands & Moving Averages
+    // ----------------------------------------------------
     if (showBOLL) {
       const drawBollLine = (lineData: (number | null)[], color: string) => {
         ctx.strokeStyle = color;
@@ -395,16 +516,20 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       drawBollLine(boll.lower, 'rgba(56, 189, 248, 0.7)');
     }
 
-    // 5. Draw Dynamic Selected Moving Averages (MA5, MA10, MA20, MA30, MA60, MA120, MA250)
     if (showMA) {
       const drawMALine = (maData: (number | null)[], color: string) => {
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.3;
         ctx.beginPath();
         let started = false;
-        for (let i = renderStartIndex; i < renderEndIndex; i++) {
+        const lineStart = Math.max(0, renderStartIndex - 1);
+        const lineEnd = Math.min(total, renderEndIndex + 1);
+        for (let i = lineStart; i < lineEnd; i++) {
           const val = maData[i];
-          if (val === null || val === undefined) continue;
+          if (val === null || val === undefined || isNaN(val)) {
+            started = false;
+            continue;
+          }
           const x = getX(i);
           const y = getPriceY(val);
           if (!started) {
@@ -424,7 +549,30 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       });
     }
 
-    // 6. Draw Auto Trendlines
+    // ----------------------------------------------------
+    // LAYER G: Channel Lines (通道线 - 黄绿色高亮通道)
+    // ----------------------------------------------------
+    if (showChannelLines && channelLines) {
+      const drawChannelBound = (line: { startIndex: number; endIndex: number; startPrice: number; endPrice: number } | null) => {
+        if (!line) return;
+        const x1 = getX(line.startIndex);
+        const y1 = getPriceY(line.startPrice);
+        const x2 = getX(line.endIndex);
+        const y2 = getPriceY(line.endPrice);
+
+        ctx.strokeStyle = '#a3e635'; // Vibrant Lime
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      };
+
+      drawChannelBound(channelLines.upper);
+      drawChannelBound(channelLines.lower);
+    }
+
+    // Auto Trendlines
     if (showTrendlines && trendlines.length > 0) {
       for (const line of trendlines) {
         if (line.endIndex < renderStartIndex || line.startIndex > renderEndIndex) continue;
@@ -442,6 +590,83 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
       }
+    }
+
+    // ----------------------------------------------------
+    // LAYER H: V-Shape Reversal Tags (V 形反转 ↓ 标识)
+    // ----------------------------------------------------
+    if (showPatterns && vReversals.length > 0) {
+      for (const v of vReversals) {
+        const vx = getX(v.index);
+        const vy = getPriceY(v.price);
+        if (vx >= padding.left && vx <= padding.left + chartWidth) {
+          const badgeW = 68;
+          const badgeH = 22;
+          const badgeX = vx - badgeW / 2;
+          const badgeY = vy - 32;
+
+          // Draw Badge Box
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+          ctx.fill();
+          ctx.stroke();
+
+          // Badge Text
+          ctx.fillStyle = '#fde047';
+          ctx.font = 'bold 11px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('V 形反转 ↓', vx, badgeY + 15);
+          ctx.textAlign = 'left';
+
+          // Pointer Line
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(vx, badgeY + badgeH);
+          ctx.lineTo(vx, vy - 4);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // ----------------------------------------------------
+    // LAYER I: Trade Plan Horizontal Target / Entry / Stop Lines & Badges
+    // ----------------------------------------------------
+    if (showTradePlan && tradePlan) {
+      const drawPlanLine = (price: number, color: string, badgeBg: string, label: string) => {
+        if (price < paddedMinPrice || price > paddedMaxPrice) return;
+        const y = getPriceY(price);
+
+        // Solid Horizontal Line
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+
+        // Right Edge Badge
+        const badgeW = 60;
+        const badgeH = 18;
+        const bx = padding.left + chartWidth + 2;
+        const by = y - badgeH / 2;
+
+        ctx.fillStyle = badgeBg;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, badgeW, badgeH, 3);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(`${label} ${price}`, bx + 4, by + 13);
+      };
+
+      drawPlanLine(tradePlan.takeProfit, '#22c55e', '#16a34a', '止盈');
+      drawPlanLine(tradePlan.entry, '#e2e8f0', '#334155', '入场');
+      drawPlanLine(tradePlan.stopLoss, '#ef4444', '#dc2626', '止损');
     }
 
     // 7. Draw Sub-Indicator (MACD / RSI / KDJ)
@@ -643,6 +868,10 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     showBOLL,
     showSupportResistance,
     showTrendlines,
+    showChannelLines,
+    showPatterns,
+    showBoxes,
+    showTradePlan,
     subIndicator,
     hoverIndex,
     mousePos,
@@ -654,6 +883,11 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     supports,
     resistances,
     trendlines,
+    channelLines,
+    vReversals,
+    trianglePattern,
+    highlightBoxes,
+    tradePlan,
   ]);
 
   // Window-level mouse up / move for ultra-smooth drag
@@ -747,6 +981,75 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       <div className="p-2.5 border-b border-[#1b2532] bg-[#0a0f16] flex flex-wrap items-center justify-between gap-2.5 text-xs">
         {/* Left: Indicator overlays toggles */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="px-2 py-0.5 rounded bg-[#16202c] text-[#d4a038] font-mono text-[11px] border border-[#233346] font-semibold flex items-center gap-1">
+            <span>前复权</span>
+          </div>
+
+          <button
+            onClick={() => setShowChannelLines(!showChannelLines)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+              showChannelLines
+                ? 'bg-[#1a2330] border-lime-500/80 text-lime-400 font-bold shadow-[0_0_8px_rgba(163,230,53,0.2)]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
+            }`}
+            title="显示/隐藏 通道上下轨趋势线"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>通道线</span>
+          </button>
+
+          <button
+            onClick={() => setShowPatterns(!showPatterns)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+              showPatterns
+                ? 'bg-[#1a2330] border-purple-500/80 text-purple-300 font-bold shadow-[0_0_8px_rgba(168,85,247,0.2)]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
+            }`}
+            title="显示/隐藏 V形反转标线与收敛三角区域"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>形态分析</span>
+          </button>
+
+          <button
+            onClick={() => setShowBoxes(!showBoxes)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+              showBoxes
+                ? 'bg-[#1a2330] border-amber-500/80 text-amber-400 font-bold shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
+            }`}
+            title="显示/隐藏 承压阻力框与筑底支撑框"
+          >
+            <Square className="w-3.5 h-3.5" />
+            <span>形态框选</span>
+          </button>
+
+          <button
+            onClick={() => setShowSupportResistance(!showSupportResistance)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+              showSupportResistance
+                ? 'bg-[#1a2330] border-cyan-500/80 text-cyan-400 font-bold shadow-[0_0_8px_rgba(6,182,212,0.2)]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
+            }`}
+            title="显示/隐藏 S1/R1 关键支撑阻力水平带"
+          >
+            <Crosshair className="w-3.5 h-3.5" />
+            <span>S1/R1带</span>
+          </button>
+
+          <button
+            onClick={() => setShowTradePlan(!showTradePlan)}
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
+              showTradePlan
+                ? 'bg-[#1a2330] border-emerald-500/80 text-emerald-400 font-bold shadow-[0_0_8px_rgba(34,197,94,0.2)]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
+            }`}
+            title="显示/隐藏 止盈/入场/止损 策略标线与风险收益区间"
+          >
+            <Target className="w-3.5 h-3.5" />
+            <span>止盈止损</span>
+          </button>
+
           <button
             onClick={() => setShowMA(!showMA)}
             className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
@@ -794,28 +1097,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({
             }`}
           >
             <span>布林 BOLL</span>
-          </button>
-
-          <button
-            onClick={() => setShowSupportResistance(!showSupportResistance)}
-            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
-              showSupportResistance
-                ? 'bg-[#1a2330] border-emerald-500/70 text-emerald-400'
-                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <span>支撑阻力</span>
-          </button>
-
-          <button
-            onClick={() => setShowTrendlines(!showTrendlines)}
-            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
-              showTrendlines
-                ? 'bg-[#1a2330] border-cyan-500/70 text-cyan-400'
-                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <span>趋势线</span>
           </button>
         </div>
 

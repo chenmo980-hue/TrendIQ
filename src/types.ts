@@ -82,6 +82,58 @@ export interface Trendline {
   slope: number;
 }
 
+export interface VReversal {
+  index: number;
+  price: number;
+  type: 'top' | 'bottom';
+  label: string;
+}
+
+export interface HighlightBox {
+  startIdx: number;
+  endIdx: number;
+  minPrice: number;
+  maxPrice: number;
+  type: 'top' | 'bottom' | 'breakout';
+  color: string;
+  borderColor: string;
+  label?: string;
+}
+
+export interface TrianglePattern {
+  p1: { index: number; price: number }; // peak 1
+  p2: { index: number; price: number }; // trough 1
+  p3: { index: number; price: number }; // peak 2 or apex
+  p4?: { index: number; price: number }; // trough 2
+  label?: string;
+}
+
+export interface ChannelLines {
+  upper: {
+    startIndex: number;
+    endIndex: number;
+    startPrice: number;
+    endPrice: number;
+  } | null;
+  lower: {
+    startIndex: number;
+    endIndex: number;
+    startPrice: number;
+    endPrice: number;
+  } | null;
+}
+
+export interface TradePlanLevels {
+  direction: 'bull' | 'bear';
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  riskRewardRatio: number;
+  entryZone: [number, number];
+  stopZone: [number, number];
+  targetZone: [number, number];
+}
+
 export interface IndicatorSummary {
   name: string;
   status: 'bullish' | 'bearish' | 'neutral';
