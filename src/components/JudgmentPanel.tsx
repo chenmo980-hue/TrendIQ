@@ -5,25 +5,19 @@ import {
   KlinePeriod,
   MarketIndexItem,
   AIAnalysisResponse,
-  MAValues,
-  MACDValues,
-  RSIValues,
-  BOLLValues,
-  KDJValues,
 } from '../types';
 import {
   Brain,
   Sparkles,
   ShieldAlert,
   CheckCircle2,
-  AlertTriangle,
-  Info,
   TrendingUp,
   TrendingDown,
   Layers,
   Copy,
   Check,
   RefreshCw,
+  Zap,
 } from 'lucide-react';
 
 interface JudgmentPanelProps {
@@ -42,14 +36,12 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysisResponse | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!judgment) return null;
 
   const handleGenerateAI = async () => {
     if (!quote) return;
     setIsAiLoading(true);
-    setErrorMsg(null);
 
     try {
       const resp = await fetch('/api/analyze-data', {
@@ -71,14 +63,14 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
       });
 
       if (!resp.ok) {
-        throw new Error(`AI 请求失败 (HTTP ${resp.status})`);
+        throw new Error(`HTTP ${resp.status}`);
       }
 
       const data = await resp.json();
       setAiAnalysis(data);
     } catch (err: any) {
       console.warn('AI analysis fallback triggered:', err);
-      // Zero-failure fallback so offline or key-restricted local setups always get full technical interpretation
+      // Zero-failure fallback
       const supStr = judgment.supportLevels?.length ? '¥' + judgment.supportLevels.join(' / ¥') : '近期低点';
       const resStr = judgment.resistanceLevels?.length ? '¥' + judgment.resistanceLevels.join(' / ¥') : '前高阻力';
       setAiAnalysis({
@@ -98,238 +90,168 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
 
   const handleCopyAnalysis = () => {
     if (!aiAnalysis) return;
-    const text = `【${quote?.name} (${quote?.code}) 技术分析解读】
-周期：${period} | 评分：${judgment.score}
-趋势研判：${aiAnalysis.trendAssessment}
-量价关系：${aiAnalysis.volumePriceAnalysis}
-指标共振：${aiAnalysis.indicatorResonance}
-关键位置：${aiAnalysis.keyLevels}
-风险提示：${aiAnalysis.riskNotice}`;
+    const text = `【${quote?.name} (${quote?.code}) AI 资深技术研判】\n\n` +
+      `1. 趋势研判与结构演变：\n${aiAnalysis.trendAssessment}\n\n` +
+      `2. 量价关系与资金动能：\n${aiAnalysis.volumePriceAnalysis}\n\n` +
+      `3. 指标多维共振信号：\n${aiAnalysis.indicatorResonance}\n\n` +
+      `4. 关键位置攻防与策略：\n${aiAnalysis.keyLevels}\n\n` +
+      `风险提示：\n${aiAnalysis.riskNotice}`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const items = Array.isArray(judgment.indicatorsSummary) ? judgment.indicatorsSummary : [];
+  const maItem = items.find((i) => i.name.includes('MA'));
+  const macdItem = items.find((i) => i.name.includes('MACD'));
+  const rsiItem = items.find((i) => i.name.includes('RSI'));
+  const bollItem = items.find((i) => i.name.includes('BOLL'));
+  const kdjItem = items.find((i) => i.name.includes('KDJ'));
+
+  const supText = judgment.supportLevels?.length ? '¥' + judgment.supportLevels.slice(0, 2).map((v) => v.toFixed(2)).join(' / ¥') : '暂未探明';
+  const resText = judgment.resistanceLevels?.length ? '¥' + judgment.resistanceLevels.slice(0, 2).map((v) => v.toFixed(2)).join(' / ¥') : '暂无密集';
+
   return (
     <div className="space-y-4">
-      {/* 1. Deterministic Rule-Based Judgment Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+      {/* 1. Rule-based Technical Judgment Card matching screenshot */}
+      <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg p-5 shadow-lg space-y-4">
+        {/* Header Title + Direction Tag */}
+        <div className="flex items-center justify-between pb-3 border-b border-[#1b2532]">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-                规则引擎 · 技术面客观研判
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
-                  确定性算法
-                </span>
-              </h3>
-              <p className="text-xs text-slate-400">基于均线形态、动量交叉、布林轨与成交密集区</p>
-            </div>
+            <span className="w-1 h-4 bg-[#d4a038] rounded-full" />
+            <h3 className="text-sm font-bold text-white tracking-wide">技术判断</h3>
           </div>
 
-          {/* AI Trigger Button */}
-          <button
-            onClick={handleGenerateAI}
-            disabled={isAiLoading}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-semibold shadow-md shadow-rose-600/20 transition cursor-pointer disabled:opacity-50"
-          >
-            {isAiLoading ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>AI 正在研判分析...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>一键生成 AI 综合解读</span>
-              </>
-            )}
-          </button>
+          <span className="text-xs font-semibold px-2.5 py-1 rounded bg-[#16212e] text-[#d4a038] border border-[#233346]">
+            {judgment.direction} · {judgment.score >= 50 ? `+${(judgment.score - 50) / 10}` : `-${(50 - judgment.score) / 10}`}
+          </span>
         </div>
 
-        {/* High-level summary text */}
-        <div className="my-3 p-3 rounded-lg bg-slate-950/70 border border-slate-800/80 text-xs leading-relaxed text-slate-200">
-          <span className="font-semibold text-rose-400 mr-1">【技术面概要】</span>
-          {judgment.summary}
-        </div>
+        {/* Short Summary Description */}
+        <p className="text-xs text-slate-300 leading-relaxed">
+          {judgment.summary || `${quote?.name} 当前处于【${judgment.direction}】技术状态，指标共振整体有序。`}
+        </p>
 
-        {/* Signals List */}
-        {judgment.signals.length > 0 && (
-          <div className="space-y-2 mt-3">
-            <div className="text-xs font-semibold text-slate-400 px-1">触发的技术信号</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {judgment.signals.map((sig) => {
-                const isBull = sig.level === 'bull';
-                const isBear = sig.level === 'bear';
-                const isWarn = sig.level === 'warn';
-                return (
-                  <div
-                    key={sig.id}
-                    className="p-2.5 rounded-lg bg-slate-950/50 border border-slate-800/60 flex items-start gap-2.5"
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {isBull && <CheckCircle2 className="w-4 h-4 text-rose-400" />}
-                      {isBear && <AlertTriangle className="w-4 h-4 text-emerald-400" />}
-                      {isWarn && <AlertTriangle className="w-4 h-4 text-amber-400" />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="text-xs font-semibold text-slate-100">{sig.title}</span>
-                        <span className="text-[10px] font-mono text-slate-400 bg-slate-800/80 px-1 rounded">
-                          {sig.indicator}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-300 leading-snug">{sig.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* 6 Structured Indicator Rows */}
+        <div className="space-y-2 text-xs">
+          <div className="flex items-start justify-between py-1.5 border-b border-[#151d27]">
+            <span className="text-slate-400 shrink-0 font-medium">趋势结构</span>
+            <span className="text-slate-200 text-right pl-4">{maItem?.text || '均线多头排列'}</span>
           </div>
-        )}
-
-        {/* Key Support and Resistance levels */}
-        <div className="mt-3 pt-3 border-t border-slate-800/60 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-lg p-2.5">
-            <div className="flex items-center justify-between font-semibold text-emerald-300 mb-1">
-              <span>关键支撑位 (近期低点密集区)</span>
-              <TrendingUp className="w-3.5 h-3.5" />
-            </div>
-            {judgment.supportLevels.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 font-mono font-medium">
-                {judgment.supportLevels.map((lvl, i) => (
-                  <span
-                    key={i}
-                    className="bg-emerald-950/60 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded"
-                  >
-                    ¥{lvl.toFixed(2)}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="text-slate-400">暂未探明明显支撑</span>
-            )}
+          <div className="flex items-start justify-between py-1.5 border-b border-[#151d27]">
+            <span className="text-slate-400 shrink-0 font-medium">MACD动能</span>
+            <span className="text-slate-200 text-right pl-4">{macdItem?.text || 'DIF上穿DEA，红柱发散'}</span>
           </div>
-
-          <div className="bg-rose-950/20 border border-rose-900/40 rounded-lg p-2.5">
-            <div className="flex items-center justify-between font-semibold text-rose-300 mb-1">
-              <span>关键阻力位 (前期高点密集成交)</span>
-              <TrendingDown className="w-3.5 h-3.5" />
-            </div>
-            {judgment.resistanceLevels.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5 font-mono font-medium">
-                {judgment.resistanceLevels.map((lvl, i) => (
-                  <span
-                    key={i}
-                    className="bg-rose-950/60 text-rose-300 border border-rose-800/50 px-2 py-0.5 rounded"
-                  >
-                    ¥{lvl.toFixed(2)}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="text-slate-400">上方暂无密集成交阻力</span>
-            )}
+          <div className="flex items-start justify-between py-1.5 border-b border-[#151d27]">
+            <span className="text-slate-400 shrink-0 font-medium">RSI强弱</span>
+            <span className="text-slate-200 text-right pl-4">{rsiItem?.text || 'RSI处于中性偏强区间'}</span>
+          </div>
+          <div className="flex items-start justify-between py-1.5 border-b border-[#151d27]">
+            <span className="text-slate-400 shrink-0 font-medium">布林带</span>
+            <span className="text-slate-200 text-right pl-4">{bollItem?.text || '运行于中轨上方'}</span>
+          </div>
+          <div className="flex items-start justify-between py-1.5 border-b border-[#151d27]">
+            <span className="text-slate-400 shrink-0 font-medium">KDJ</span>
+            <span className="text-slate-200 text-right pl-4">{kdjItem?.text || '金叉形成'}</span>
+          </div>
+          <div className="flex items-start justify-between py-1.5">
+            <span className="text-slate-400 shrink-0 font-medium">支撑压力</span>
+            <span className="text-slate-200 text-right pl-4">支撑 {supText} / 阻力 {resText}</span>
           </div>
         </div>
 
-        {/* Compliance disclaimer */}
-        <div className="mt-3 pt-2 text-[10px] text-slate-400 leading-relaxed border-t border-slate-800/40">
-          {judgment.disclaimer}
-        </div>
+        {/* Gold Border AI Trigger Button matching screenshot */}
+        <button
+          onClick={handleGenerateAI}
+          disabled={isAiLoading}
+          className="w-full py-2.5 px-4 rounded-md border border-[#d4a038]/70 hover:border-[#d4a038] bg-[#1a2330] hover:bg-[#202c3d] text-[#d4a038] font-bold text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+        >
+          {isAiLoading ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#d4a038]" />
+              <span>AI 正在深度研判中...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-3.5 h-3.5 text-[#d4a038]" />
+              <span>✨ 生成 AI 综合解读</span>
+            </>
+          )}
+        </button>
+
+        {/* Disclaimer note matching screenshot */}
+        <p className="text-[10px] text-slate-400 leading-relaxed pt-1">
+          以上内容基于历史行情数据的技术指标自动计算生成，仅反映技术面统计特征，不构成任何投资建议，不代表对未来走势的保证，据此操作风险自负。
+        </p>
       </div>
 
-      {/* 2. AI In-Depth Technical Interpretation Card (Gemini 3.7 Flash) */}
+      {/* 2. AI In-Depth Report Card (Appears smoothly when generated) */}
       {aiAnalysis && (
-        <div className="bg-gradient-to-b from-slate-900 to-slate-950 border border-rose-500/40 rounded-xl p-5 shadow-2xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Header */}
-          <div className="flex items-center justify-between gap-3 pb-3 mb-4 border-b border-slate-800/80">
+        <div className="bg-[#0e1319] border border-[#d4a038]/50 rounded-lg p-5 shadow-xl space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#1b2532]">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center">
+              <div className="w-7 h-7 rounded bg-[#d4a038]/20 text-[#d4a038] flex items-center justify-center">
                 <Brain className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
                   AI 资深首席解读 · 综合报告
-                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded font-mono">
-                    Gemini 3.7 Flash
-                  </span>
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  生成时间: {aiAnalysis.generatedAt} · 结合大盘核心指数与多周期量价共振
-                </p>
+                </h4>
+                <span className="text-[10px] text-slate-400">{aiAnalysis.generatedAt}</span>
               </div>
             </div>
 
             <button
               onClick={handleCopyAnalysis}
-              className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 bg-slate-800/60 hover:bg-slate-800 px-2.5 py-1 rounded transition cursor-pointer"
+              className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white bg-[#16212e] px-2.5 py-1 rounded border border-[#233346] transition cursor-pointer"
             >
-              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-              <span>{copied ? '已复制' : '复制解读'}</span>
+              {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+              <span>{copied ? '已复制' : '复制'}</span>
             </button>
           </div>
 
-          {/* Structured Analysis Sections */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            {/* Trend assessment */}
-            <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-lg space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-rose-400">
+          <div className="space-y-3 text-xs">
+            <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-1">
+              <div className="font-bold text-[#d4a038] flex items-center gap-1.5">
                 <TrendingUp className="w-3.5 h-3.5" />
                 <span>1. 趋势研判与结构演变</span>
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.trendAssessment}</p>
             </div>
 
-            {/* Volume price */}
-            <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-lg space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-amber-400">
+            <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-1">
+              <div className="font-bold text-amber-400 flex items-center gap-1.5">
                 <Layers className="w-3.5 h-3.5" />
                 <span>2. 量价关系与资金动能</span>
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.volumePriceAnalysis}</p>
             </div>
 
-            {/* Indicators resonance */}
-            <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-lg space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-sky-400">
+            <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-1">
+              <div className="font-bold text-sky-400 flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>3. 指标多维共振信号</span>
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.indicatorResonance}</p>
             </div>
 
-            {/* Key levels */}
-            <div className="bg-slate-950/70 border border-slate-800 p-3.5 rounded-lg space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-emerald-400">
+            <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-1">
+              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>4. 关键位置攻防与策略</span>
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.keyLevels}</p>
             </div>
-          </div>
 
-          {/* Risk notice */}
-          <div className="mt-4 p-3 rounded-lg bg-rose-950/30 border border-rose-900/40 text-[11px] text-rose-200 flex items-start gap-2">
-            <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-            <div>
-              <span className="font-bold text-rose-300 mr-1">风险提示：</span>
-              {aiAnalysis.riskNotice}
+            <div className="p-2.5 rounded bg-rose-950/20 border border-rose-900/30 text-[10px] text-rose-300 flex items-start gap-1.5">
+              <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">风险提示：</span>
+                {aiAnalysis.riskNotice}
+              </div>
             </div>
           </div>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="p-3 bg-red-950/40 border border-red-800 rounded-lg text-xs text-red-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{errorMsg}</span>
         </div>
       )}
     </div>
