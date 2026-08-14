@@ -20,7 +20,7 @@ import {
   detectSupportResistance,
   detectTrendlines,
 } from '../../lib/indicators';
-import { Maximize2, Minimize2, ZoomIn, ZoomOut, RotateCcw, Eye, Layers } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Sliders } from 'lucide-react';
 
 interface KlineChartProps {
   data: KlinePoint[];
@@ -29,6 +29,23 @@ interface KlineChartProps {
   stockName?: string;
   stockCode?: string;
 }
+
+interface MAConfigItem {
+  period: number;
+  label: string;
+  color: string;
+  key: keyof MAValues;
+}
+
+const MA_CONFIGS: MAConfigItem[] = [
+  { period: 5, label: 'MA5', color: '#fbbf24', key: 'ma5' },
+  { period: 10, label: 'MA10', color: '#38bdf8', key: 'ma10' },
+  { period: 20, label: 'MA20', color: '#c084fc', key: 'ma20' },
+  { period: 30, label: 'MA30', color: '#fb923c', key: 'ma30' },
+  { period: 60, label: 'MA60', color: '#4ade80', key: 'ma60' },
+  { period: 120, label: 'MA120', color: '#f472b6', key: 'ma120' },
+  { period: 250, label: 'MA250', color: '#818cf8', key: 'ma250' },
+];
 
 export const KlineChart: React.FC<KlineChartProps> = ({
   data,
@@ -41,7 +58,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Viewport / Zoom & Pan state
-  const [zoomIndex, setZoomIndex] = useState(0); // offset from right
+  const [zoomIndex, setZoomIndex] = useState(0); // offset from right (0 = latest)
   const [visibleCount, setVisibleCount] = useState(80);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartX, setDragStartX] = useState(0);
@@ -52,10 +69,27 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
   // Indicator Visibility Toggles
   const [showMA, setShowMA] = useState(true);
+  const [activeMAs, setActiveMAs] = useState<Record<number, boolean>>({
+    5: true,
+    10: true,
+    20: true,
+    30: false,
+    60: true,
+    120: true,
+    250: false,
+  });
+
   const [showBOLL, setShowBOLL] = useState(false);
   const [showSupportResistance, setShowSupportResistance] = useState(true);
   const [showTrendlines, setShowTrendlines] = useState(true);
   const [subIndicator, setSubIndicator] = useState<'MACD' | 'RSI' | 'KDJ'>('MACD');
+  const [showMASettings, setShowMASettings] = useState(false);
+
+  // Reset zoom and anchor to the latest candle on period or stock change
+  useEffect(() => {
+    setZoomIndex(0);
+    setHoverIndex(null);
+  }, [period, stockCode, data.length]);
 
   // Precalculate technical indicators
   const mas = useMemo(() => calculateAllMA(data), [data]);
@@ -68,7 +102,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
   // Adjust visible bounds
   const total = data.length;
-  const endIndex = Math.min(total, total - zoomIndex);
+  const safeZoom = Math.min(Math.max(0, zoomIndex), Math.max(0, total - 10));
+  const endIndex = Math.min(total, total - safeZoom);
   const startIndex = Math.max(0, endIndex - visibleCount);
   const visibleData = useMemo(() => data.slice(startIndex, endIndex), [data, startIndex, endIndex]);
 
@@ -77,6 +112,13 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     ? hoverIndex
     : endIndex - 1;
   const activeCandle = data[activeIndex] || data[data.length - 1];
+
+  const toggleMA = (periodNum: number) => {
+    setActiveMAs((prev) => ({
+      ...prev,
+      [periodNum]: !prev[periodNum],
+    }));
+  };
 
   // Draw chart on canvas
   useEffect(() => {
@@ -99,12 +141,16 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
     ctx.scale(dpr, dpr);
 
-    // Layout configuration
+    // Layout configuration with right margin buffer for latest candle
     const padding = { top: 25, right: 65, bottom: 25, left: 10 };
     const chartWidth = width - padding.left - padding.right;
     const totalHeight = height - padding.top - padding.bottom;
 
-    // 3 vertically stacked regions: Main K-line (60%), Volume (18%), Sub-indicator (22%)
+    // Dedicated right padding space (20px) so the latest candle is completely visible
+    const rightBufferPx = 20;
+    const candleAreaWidth = Math.max(10, chartWidth - rightBufferPx);
+
+    // 3 vertically stacked regions: Main K-line (58%), Volume (18%), Sub-indicator (24%)
     const gap = 12;
     const mainHeight = totalHeight * 0.58;
     const volHeight = totalHeight * 0.18;
@@ -131,9 +177,15 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       if (p.volume > maxVol) maxVol = p.volume;
 
       if (showMA) {
-        if (mas.ma5[i]) { minPrice = Math.min(minPrice, mas.ma5[i]!); maxPrice = Math.max(maxPrice, mas.ma5[i]!); }
-        if (mas.ma20[i]) { minPrice = Math.min(minPrice, mas.ma20[i]!); maxPrice = Math.max(maxPrice, mas.ma20[i]!); }
-        if (mas.ma60[i]) { minPrice = Math.min(minPrice, mas.ma60[i]!); maxPrice = Math.max(maxPrice, mas.ma60[i]!); }
+        MA_CONFIGS.forEach((cfg) => {
+          if (activeMAs[cfg.period]) {
+            const val = mas[cfg.key][i];
+            if (val !== null && val !== undefined) {
+              minPrice = Math.min(minPrice, val);
+              maxPrice = Math.max(maxPrice, val);
+            }
+          }
+        });
       }
       if (showBOLL) {
         if (boll.upper[i]) maxPrice = Math.max(maxPrice, boll.upper[i]!);
@@ -153,9 +205,9 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     const finalPriceRange = paddedMaxPrice - paddedMinPrice;
 
     // Helper functions for coordinates
+    const step = candleAreaWidth / Math.max(1, visibleData.length);
     const getX = (idx: number) => {
       const relIdx = idx - startIndex;
-      const step = chartWidth / visibleData.length;
       return padding.left + relIdx * step + step / 2;
     };
 
@@ -168,14 +220,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       return volY + (1 - vol / safeMax) * volHeight;
     };
 
-    const candleWidth = Math.max(2, (chartWidth / visibleData.length) * 0.72);
+    const candleWidth = Math.max(2, Math.min(22, step * 0.72));
 
     // Grid lines & Axis lines
     ctx.strokeStyle = '#1e293b';
     ctx.lineWidth = 1;
 
-    const monoFont = '10px "JetBrains Mono", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif';
-    const labelFont = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif';
+    const monoFont = '10px "JetBrains Mono", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+    const labelFont = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif';
 
     // Main Chart horizontal grid & price labels
     const gridSteps = 4;
@@ -287,16 +339,18 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     if (highestCandle.price !== -Infinity) {
       const hx = getX(highestCandle.idx);
       const hy = getPriceY(highestCandle.price);
+      const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, hx - 20));
       ctx.fillStyle = '#f59e0b';
       ctx.font = labelFont;
-      ctx.fillText(`▲ 高 ${highestCandle.price}`, hx - 20, Math.max(mainY + 12, hy - 4));
+      ctx.fillText(`▲ 高 ${highestCandle.price}`, textX, Math.max(mainY + 12, hy - 4));
     }
     if (lowestCandle.price !== Infinity) {
       const lx = getX(lowestCandle.idx);
       const ly = getPriceY(lowestCandle.price);
+      const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, lx - 20));
       ctx.fillStyle = '#38bdf8';
       ctx.font = labelFont;
-      ctx.fillText(`▼ 低 ${lowestCandle.price}`, lx - 20, Math.min(mainY + mainHeight - 4, ly + 14));
+      ctx.fillText(`▼ 低 ${lowestCandle.price}`, textX, Math.min(mainY + mainHeight - 4, ly + 14));
     }
 
     // 4. Draw Bollinger Bands
@@ -326,16 +380,16 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       drawBollLine(boll.lower, 'rgba(56, 189, 248, 0.7)');
     }
 
-    // 5. Draw Moving Averages
+    // 5. Draw Dynamic Selected Moving Averages (MA5, MA10, MA20, MA30, MA60, MA120, MA250)
     if (showMA) {
       const drawMALine = (maData: (number | null)[], color: string) => {
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.3;
         ctx.beginPath();
         let started = false;
         for (let i = startIndex; i < endIndex; i++) {
           const val = maData[i];
-          if (val === null) continue;
+          if (val === null || val === undefined) continue;
           const x = getX(i);
           const y = getPriceY(val);
           if (!started) {
@@ -348,10 +402,11 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.stroke();
       };
 
-      drawMALine(mas.ma5, '#fbbf24');  // MA5 Yellow
-      drawMALine(mas.ma10, '#38bdf8'); // MA10 Cyan
-      drawMALine(mas.ma20, '#c084fc'); // MA20 Purple
-      drawMALine(mas.ma60, '#4ade80'); // MA60 Green
+      MA_CONFIGS.forEach((cfg) => {
+        if (activeMAs[cfg.period]) {
+          drawMALine(mas[cfg.key], cfg.color);
+        }
+      });
     }
 
     // 6. Draw Auto Trendlines
@@ -564,6 +619,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     startIndex,
     endIndex,
     showMA,
+    activeMAs,
     showBOLL,
     showSupportResistance,
     showTrendlines,
@@ -590,10 +646,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
     const padding = { left: 10, right: 65 };
     const chartWidth = rect.width - padding.left - padding.right;
+    const rightBufferPx = 20;
+    const candleAreaWidth = Math.max(10, chartWidth - rightBufferPx);
 
     if (x >= padding.left && x <= padding.left + chartWidth) {
       const relX = x - padding.left;
-      const step = chartWidth / visibleData.length;
+      const step = candleAreaWidth / Math.max(1, visibleData.length);
       const indexOffset = Math.floor(relX / step);
       const computedIndex = Math.min(endIndex - 1, Math.max(startIndex, startIndex + indexOffset));
       setHoverIndex(computedIndex);
@@ -632,7 +690,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       setVisibleCount((prev) => Math.max(25, prev - 6));
     } else {
       // Zoom out
-      setVisibleCount((prev) => Math.min(Math.min(220, data.length), prev + 6));
+      setVisibleCount((prev) => Math.min(Math.min(240, data.length), prev + 6));
     }
   };
 
@@ -648,80 +706,93 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   ];
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg flex flex-col">
-      {/* Top Toolbar: Timeframe Selector & Indicators Toggle */}
-      <div className="p-3 border-b border-slate-800/80 bg-slate-950/40 flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Left: Period switches */}
-        <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-          {periods.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => onPeriodChange(p.id)}
-              className={`px-2.5 py-1 rounded font-medium transition cursor-pointer ${
-                period === p.id
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Center: Overlays toggles */}
+    <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg overflow-hidden shadow-xl flex flex-col space-y-0">
+      {/* Top Toolbar: Indicator Controls & Multi-MA Selector */}
+      <div className="p-2.5 border-b border-[#1b2532] bg-[#0a0f16] flex flex-wrap items-center justify-between gap-2.5 text-xs">
+        {/* Left: Indicator overlays toggles */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <button
             onClick={() => setShowMA(!showMA)}
-            className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
               showMA
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-300'
-                : 'border-slate-800 text-slate-400 hover:bg-slate-800'
+                ? 'bg-[#1a2330] border-[#d4a038]/70 text-[#d4a038]'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
             }`}
           >
             <span>均线 MA</span>
           </button>
+
+          {/* Flexible MA Selector Pills (MA5, MA10, MA20, MA30, MA60, MA120, MA250) */}
+          {showMA && (
+            <div className="flex items-center gap-1 bg-[#101721] px-1.5 py-0.5 rounded border border-[#1e2a3a]">
+              {MA_CONFIGS.map((cfg) => {
+                const isActive = !!activeMAs[cfg.period];
+                return (
+                  <button
+                    key={cfg.period}
+                    onClick={() => toggleMA(cfg.period)}
+                    title={`点击${isActive ? '隐藏' : '显示'} ${cfg.label}`}
+                    className={`px-1.5 py-0.5 rounded text-[11px] font-mono font-medium transition cursor-pointer ${
+                      isActive
+                        ? 'font-bold'
+                        : 'opacity-40 hover:opacity-80'
+                    }`}
+                    style={{
+                      color: isActive ? cfg.color : '#94a3b8',
+                      backgroundColor: isActive ? `${cfg.color}15` : 'transparent',
+                    }}
+                  >
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <button
             onClick={() => setShowBOLL(!showBOLL)}
-            className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
               showBOLL
-                ? 'bg-pink-500/10 border-pink-500/40 text-pink-300'
-                : 'border-slate-800 text-slate-400 hover:bg-slate-800'
+                ? 'bg-[#1a2330] border-pink-500/70 text-pink-400'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
             }`}
           >
             <span>布林 BOLL</span>
           </button>
+
           <button
             onClick={() => setShowSupportResistance(!showSupportResistance)}
-            className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
               showSupportResistance
-                ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                : 'border-slate-800 text-slate-400 hover:bg-slate-800'
+                ? 'bg-[#1a2330] border-emerald-500/70 text-emerald-400'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>支撑压力位</span>
+            <span>支撑阻力</span>
           </button>
+
           <button
             onClick={() => setShowTrendlines(!showTrendlines)}
-            className={`px-2 py-1 rounded border transition cursor-pointer flex items-center gap-1 ${
+            className={`px-2.5 py-1 rounded text-xs font-semibold border transition cursor-pointer flex items-center gap-1 ${
               showTrendlines
-                ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300'
-                : 'border-slate-800 text-slate-400 hover:bg-slate-800'
+                ? 'bg-[#1a2330] border-cyan-500/70 text-cyan-400'
+                : 'border-[#1e293b] text-slate-400 hover:text-slate-200'
             }`}
           >
-            <span>自动趋势线</span>
+            <span>趋势线</span>
           </button>
         </div>
 
         {/* Right: Sub-chart selector & Zoom controls */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-800">
+          <div className="flex items-center bg-[#101721] rounded p-0.5 border border-[#1e2a3a]">
             {(['MACD', 'RSI', 'KDJ'] as const).map((sub) => (
               <button
                 key={sub}
                 onClick={() => setSubIndicator(sub)}
-                className={`px-2 py-1 rounded text-[11px] font-semibold transition cursor-pointer ${
+                className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
                   subIndicator === sub
-                    ? 'bg-slate-700 text-white'
+                    ? 'bg-[#1d293a] text-white'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -733,14 +804,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
           <div className="flex items-center gap-1 text-slate-400">
             <button
               onClick={() => setVisibleCount((c) => Math.max(25, c - 15))}
-              className="p-1 hover:bg-slate-800 rounded hover:text-slate-200"
+              className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="放大图表"
             >
               <ZoomIn className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => setVisibleCount((c) => Math.min(Math.min(220, data.length), c + 15))}
-              className="p-1 hover:bg-slate-800 rounded hover:text-slate-200"
+              onClick={() => setVisibleCount((c) => Math.min(Math.min(240, data.length), c + 15))}
+              className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="缩小图表"
             >
               <ZoomOut className="w-3.5 h-3.5" />
@@ -750,8 +821,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({
                 setZoomIndex(0);
                 setVisibleCount(80);
               }}
-              className="p-1 hover:bg-slate-800 rounded hover:text-slate-200"
-              title="重置视图"
+              className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
+              title="重置视图至最新K线"
             >
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
@@ -760,12 +831,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       </div>
 
       {/* Dynamic HUD Indicator Legend Bar */}
-      <div className="px-3 py-2 bg-slate-950/80 border-b border-slate-800/60 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono-num">
+      <div className="px-3.5 py-2 bg-[#0c1117] border-b border-[#18222e] flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono">
         {activeCandle ? (
           <>
             <div className="text-slate-400 flex items-center gap-1">
               <span>时间:</span>
-              <span className="text-slate-200 font-semibold">{activeCandle.time}</span>
+              <span className="text-slate-200 font-bold">{activeCandle.time}</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-slate-400">开: <b className="text-slate-200">{activeCandle.open}</b></span>
@@ -775,13 +846,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
               <span className="text-slate-400">量: <b className="text-slate-200">{formatVolume(activeCandle.volume)}</b></span>
             </div>
 
-            {/* MAs in Legend */}
+            {/* Selected Active MAs in Legend */}
             {showMA && (
-              <div className="flex items-center gap-2 ml-auto text-[11px]">
-                <span className="text-amber-400">MA5: {mas.ma5[activeIndex] ?? '--'}</span>
-                <span className="text-sky-400">MA10: {mas.ma10[activeIndex] ?? '--'}</span>
-                <span className="text-purple-400">MA20: {mas.ma20[activeIndex] ?? '--'}</span>
-                <span className="text-emerald-400">MA60: {mas.ma60[activeIndex] ?? '--'}</span>
+              <div className="flex items-center gap-2.5 ml-auto text-[11px] flex-wrap">
+                {MA_CONFIGS.filter((cfg) => activeMAs[cfg.period]).map((cfg) => (
+                  <span key={cfg.period} style={{ color: cfg.color }}>
+                    {cfg.label}: {mas[cfg.key][activeIndex] ?? '--'}
+                  </span>
+                ))}
               </div>
             )}
           </>
@@ -793,7 +865,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       {/* Main Canvas Chart Area */}
       <div
         ref={containerRef}
-        className="relative w-full h-[500px] flex-1 bg-slate-950 cursor-crosshair select-none"
+        className="relative w-full h-[500px] flex-1 bg-[#070a0e] cursor-crosshair select-none"
       >
         <canvas
           ref={canvasRef}

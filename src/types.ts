@@ -38,6 +38,7 @@ export interface MAValues {
   ma30: (number | null)[];
   ma60: (number | null)[];
   ma120: (number | null)[];
+  ma250: (number | null)[];
 }
 
 export interface MACDValues {

@@ -41,7 +41,7 @@ export function calculateEMA(data: KlinePoint[], period: number): (number | null
 }
 
 /**
- * Calculate All MA lines (5, 10, 20, 30, 60, 120)
+ * Calculate All MA lines (5, 10, 20, 30, 60, 120, 250)
  */
 export function calculateAllMA(data: KlinePoint[]): MAValues {
   return {
@@ -51,6 +51,7 @@ export function calculateAllMA(data: KlinePoint[]): MAValues {
     ma30: calculateMA(data, 30),
     ma60: calculateMA(data, 60),
     ma120: calculateMA(data, 120),
+    ma250: calculateMA(data, 250),
   };
 }
 
