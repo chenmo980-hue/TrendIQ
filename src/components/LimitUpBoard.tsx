@@ -222,7 +222,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                   短线情绪周期
                 </span>
                 <span className="font-mono text-amber-400 font-bold">
-                  {summary?.marketSentimentScore || 88} 分
+                  {summary?.sentimentScore || 88} 分
                 </span>
               </div>
               <div className="text-sm font-bold text-amber-300 truncate">
@@ -231,7 +231,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
               <div className="mt-2 w-full bg-[#080d14] rounded-full h-1.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-amber-500 to-red-500 h-full rounded-full"
-                  style={{ width: `${summary?.marketSentimentScore || 88}%` }}
+                  style={{ width: `${summary?.sentimentScore || 88}%` }}
                 ></div>
               </div>
             </div>
@@ -257,7 +257,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                 <TrendingUp className="w-3.5 h-3.5 text-red-400" />
               </div>
               <div className="text-lg font-bold font-mono text-red-400">
-                {summary?.totalLimitUp || 43} 家
+                {summary?.totalLimitUp || stocks.length || 43} 家
               </div>
               <div className="text-[11px] text-slate-500 mt-0.5">
                 跌停: {summary?.totalLimitDown || 2} 家
@@ -271,9 +271,9 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div className="text-lg font-bold font-mono text-red-400">
-                +{summary?.yesterdayLimitUpReturn || 4.85}%
+                +{summary?.yesterdayPremium || 4.85}%
               </div>
-              <div className="text-[11px] text-emerald-400 mt-0.5">赚钱效应极强</div>
+              <div className="text-[11px] text-emerald-400 mt-0.5">赚钱效应活跃</div>
             </div>
 
             {/* 5. 空间高度板 */}
@@ -283,10 +283,10 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                 <Award className="w-3.5 h-3.5 text-amber-400" />
               </div>
               <div className="text-lg font-bold font-mono text-amber-300">
-                7 连板
+                {summary?.maxConsecutiveBoards || 5} 连板
               </div>
               <div className="text-[11px] text-slate-400 truncate mt-0.5">
-                万丰奥威 (低空经济)
+                {summary?.topDragonStock || (stocks[0] ? `${stocks[0].name} (${stocks[0].sector})` : '空间领涨龙头')}
               </div>
             </div>
           </div>
