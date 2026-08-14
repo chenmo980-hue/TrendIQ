@@ -58,13 +58,17 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Viewport / Zoom & Pan state:
-  // rightOffset: 0 means normal anchor at right edge.
-  // rightOffset < 0 (e.g. -5 to -30) means dragged to the right, creating blank space on the right side.
-  // rightOffset > 0 means viewing historical candles to the left.
-  const [rightOffset, setRightOffset] = useState<number>(-8); // default to -8 candles of right blank space (classic TradingView/TongDaXin feel)
-  const [visibleCount, setVisibleCount] = useState(70);
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStartX, setDragStartX] = useState(0);
+  // rightOffset: 0 means latest candle is on the right.
+  // rightOffset < 0 (e.g. -12) means dragged to the right, leaving blank space on the right side.
+  // rightOffset > 0 means dragged to the left, viewing historical past candles.
+  const [rightOffset, setRightOffset] = useState<number>(-12);
+  const [visibleCount, setVisibleCount] = useState(65);
+  
+  // Dragging state using ref for immediate smooth tracking
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartOffsetRef = useRef(-12);
+  const [isDraggingState, setIsDraggingState] = useState(false);
 
   // Hover Crosshair state
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -87,9 +91,9 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const [showTrendlines, setShowTrendlines] = useState(true);
   const [subIndicator, setSubIndicator] = useState<'MACD' | 'RSI' | 'KDJ'>('MACD');
 
-  // Reset offset to comfortable right-padded space (-8) on period or stock change
+  // Reset offset to comfortable right-padded space (-12) on period or stock change
   useEffect(() => {
-    setRightOffset(-8);
+    setRightOffset(-12);
     setHoverIndex(null);
   }, [period, stockCode]);
 
@@ -104,12 +108,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
   const total = data.length;
 
-  // Calculate visible range based on rightOffset (can be negative, which leaves blank room on right)
-  // safeEndIndex: the candle index corresponding to the right edge of viewport
-  const safeEndIndex = Math.min(total, total - rightOffset);
-  const safeStartIndex = Math.max(0, safeEndIndex - visibleCount);
-
-  // Active candle to show in HUD (hovered or latest)
+  // Calculate active candle for HUD
   const activeIndex = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < total
     ? hoverIndex
     : total - 1;
@@ -162,24 +161,29 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     ctx.fillStyle = '#0b0f19';
     ctx.fillRect(0, 0, width, height);
 
-    // Calculate slot width based on visibleCount
+    // Step width per candle
     const step = chartWidth / Math.max(1, visibleCount);
-    const candleWidth = Math.max(2, Math.min(24, step * 0.72));
+    const candleWidth = Math.max(2, Math.min(26, step * 0.72));
 
-    // Coordinate mapping helper:
-    // Slot 0 starts at (safeEndIndex - visibleCount)
+    // Viewport window mapping:
+    // Slot index runs from 0 to visibleCount - 1 (from left to right in canvas)
+    // The rightmost slot corresponds to data index: (total - 1 - rightOffset)
+    // The leftmost slot corresponds to data index: (total - 1 - rightOffset) - (visibleCount - 1)
+    const rightmostDataIdx = (total - 1) - rightOffset;
+    const leftmostDataIdx = rightmostDataIdx - (visibleCount - 1);
+
     const getX = (idx: number) => {
-      const slotIndex = idx - (safeEndIndex - visibleCount);
-      return padding.left + slotIndex * step + step / 2;
+      const slot = idx - leftmostDataIdx;
+      return padding.left + slot * step + step / 2;
     };
 
-    // Calculate price range for all visible candles
+    // Calculate price range for visible candles in viewport
     let minPrice = Infinity;
     let maxPrice = -Infinity;
     let maxVol = 0;
 
-    const renderStartIndex = Math.max(0, safeEndIndex - visibleCount);
-    const renderEndIndex = Math.min(total, safeEndIndex);
+    const renderStartIndex = Math.max(0, leftmostDataIdx);
+    const renderEndIndex = Math.min(total, rightmostDataIdx + 1);
 
     for (let i = renderStartIndex; i < renderEndIndex; i++) {
       const p = data[i];
@@ -309,7 +313,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       if (!p) continue;
       const x = getX(i);
 
-      // Only draw if within horizontal bounds
+      // Clip outside horizontal viewport
       if (x < padding.left - candleWidth || x > padding.left + chartWidth + candleWidth) continue;
 
       const isUp = p.close >= p.open;
@@ -632,7 +636,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   }, [
     data,
     total,
-    safeEndIndex,
     visibleCount,
     rightOffset,
     showMA,
@@ -653,7 +656,40 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     trendlines,
   ]);
 
-  // Mouse event handlers for pan, zoom, hover
+  // Window-level mouse up / move for ultra-smooth drag
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const padding = { left: 10, right: 65 };
+      const chartWidth = rect.width - padding.left - padding.right;
+      const candlePx = chartWidth / visibleCount;
+
+      const deltaX = e.clientX - dragStartXRef.current;
+      const candlesMoved = Math.round(deltaX / candlePx);
+
+      const minOffset = -Math.min(60, Math.floor(visibleCount * 0.8));
+      const maxOffset = total - 5;
+      const newOffset = Math.max(minOffset, Math.min(maxOffset, dragStartOffsetRef.current + candlesMoved));
+      setRightOffset(newOffset);
+    };
+
+    const handleGlobalMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsDraggingState(false);
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [visibleCount, total]);
+
+  // Canvas Mouse events
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!containerRef.current || total === 0) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -664,27 +700,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     const padding = { left: 10, right: 65 };
     const chartWidth = rect.width - padding.left - padding.right;
 
-    // Interactive dragging/panning: 
-    // Moving mouse to the right -> negative offset (revealing right blank space / dragging chart rightwards)
-    // Moving mouse to the left -> positive offset (viewing left historical bars)
-    if (isDragging) {
-      const deltaX = e.clientX - dragStartX;
-      const candlesMoved = Math.round(deltaX / (chartWidth / visibleCount));
-      if (candlesMoved !== 0) {
-        setRightOffset((prev) => {
-          // Allow dragging up to -50 candles to the right (plenty of right blank buffer)
-          // and up to total - 15 candles to the left
-          const minOffset = -Math.min(50, Math.floor(visibleCount * 0.6));
-          const maxOffset = total - 10;
-          return Math.max(minOffset, Math.min(maxOffset, prev + candlesMoved));
-        });
-        setDragStartX(e.clientX);
-      }
-    } else if (x >= padding.left && x <= padding.left + chartWidth) {
+    if (!isDraggingRef.current && x >= padding.left && x <= padding.left + chartWidth) {
       const relX = x - padding.left;
       const step = chartWidth / Math.max(1, visibleCount);
       const slotOffset = Math.floor(relX / step);
-      const computedIndex = (safeEndIndex - visibleCount) + slotOffset;
+      const rightmostDataIdx = (total - 1) - rightOffset;
+      const leftmostDataIdx = rightmostDataIdx - (visibleCount - 1);
+      const computedIndex = leftmostDataIdx + slotOffset;
+
       if (computedIndex >= 0 && computedIndex < total) {
         setHoverIndex(computedIndex);
       } else {
@@ -694,25 +717,24 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   };
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDragging(true);
-    setDragStartX(e.clientX);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartOffsetRef.current = rightOffset;
+    setIsDraggingState(true);
   };
 
   const handleMouseLeave = () => {
-    setIsDragging(false);
-    setHoverIndex(null);
-    setMousePos(null);
+    if (!isDraggingRef.current) {
+      setHoverIndex(null);
+      setMousePos(null);
+    }
   };
 
   const handleWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (e.deltaY < 0) {
       // Zoom in
-      setVisibleCount((prev) => Math.max(20, prev - 6));
+      setVisibleCount((prev) => Math.max(15, prev - 6));
     } else {
       // Zoom out
       setVisibleCount((prev) => Math.min(Math.min(240, total), prev + 6));
@@ -817,7 +839,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
           <div className="flex items-center gap-1 text-slate-400">
             <button
-              onClick={() => setVisibleCount((c) => Math.max(20, c - 15))}
+              onClick={() => setVisibleCount((c) => Math.max(15, c - 15))}
               className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="放大图表"
             >
@@ -832,8 +854,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({
             </button>
             <button
               onClick={() => {
-                setRightOffset(-8);
-                setVisibleCount(70);
+                setRightOffset(-12);
+                setVisibleCount(65);
               }}
               className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="重置视图至最新K线"
@@ -879,13 +901,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       {/* Main Canvas Chart Area */}
       <div
         ref={containerRef}
-        className="relative w-full h-[500px] flex-1 bg-[#070a0e] cursor-grab active:cursor-grabbing select-none"
+        className={`relative w-full h-[500px] flex-1 bg-[#070a0e] select-none ${
+          isDraggingState ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
       >
         <canvas
           ref={canvasRef}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
           className="w-full h-full block"

@@ -3,7 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { normalizeStockCode } from './lib/stockCode';
 import { fetchMarketContext } from './lib/marketContext';
-import { PRESET_DATABASE, generateMockKline, STOCK_PRICE_MAP } from './lib/sampleData';
+import { PRESET_DATABASE, generateMockKline, STOCK_PRICE_MAP, formatBeijingDateStr, getBeijingDate } from './lib/sampleData';
 import { aggregateMinuteKline } from './lib/aggregateMinuteKline';
 import { parseStructuredVisionAnalysis } from './lib/parseStructuredAnalysis';
 import { getGeminiAI } from './lib/geminiClient';
@@ -309,6 +309,26 @@ async function startServer() {
 
     if (!klineData || klineData.length < 10) {
       klineData = generateMockKline(quote.price, 120, period);
+    } else if (period === 'day' && quote) {
+      const todayStr = formatBeijingDateStr(getBeijingDate());
+      const lastItem = klineData[klineData.length - 1];
+      if (lastItem && lastItem.time < todayStr) {
+        klineData.push({
+          time: todayStr,
+          open: quote.open || quote.price,
+          high: quote.high || quote.price,
+          low: quote.low || quote.price,
+          close: quote.price,
+          volume: quote.volume || 1000000,
+          turnover: quote.turnover || quote.price * (quote.volume || 1000000),
+        });
+      } else if (lastItem && lastItem.time === todayStr) {
+        lastItem.high = Math.max(lastItem.high, quote.high || quote.price);
+        lastItem.low = Math.min(lastItem.low, quote.low || quote.price);
+        lastItem.close = quote.price;
+        if (quote.volume) lastItem.volume = quote.volume;
+        if (quote.turnover) lastItem.turnover = quote.turnover;
+      }
     }
 
     res.json({

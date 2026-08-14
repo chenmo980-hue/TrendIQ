@@ -1,559 +1,390 @@
-import React, { useState, useRef } from 'react';
-import { VisionAnalysisResponse, VisionPattern, VisionKeyLevel, VisionTrendline } from '../types';
+import React, { useRef, useState } from 'react';
 import {
   Upload,
-  Camera,
   Image as ImageIcon,
   Sparkles,
   Layers,
   TrendingUp,
-  AlertTriangle,
-  ShieldCheck,
-  Eye,
-  EyeOff,
-  RefreshCw,
-  Zap,
+  ShieldAlert,
+  ZoomIn,
+  Copy,
+  Check,
+  Compass,
 } from 'lucide-react';
-
-// Preset sample charts so users can test immediately with one click
-const SAMPLE_CHARTS = [
-  {
-    id: 'sample_w_bottom',
-    title: '经典双底 (W底) 突破形态',
-    subtitle: '二次探底回升 + 突破颈线位',
-    // Realistic SVG data URI representing a W-bottom candlestick chart
-    dataUrl: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" fill="%230b0f19"><rect width="800" height="450" fill="%230b0f19"/><g stroke="%231e293b" stroke-width="1"><line x1="50" y1="90" x2="750" y2="90"/><line x1="50" y1="180" x2="750" y2="180"/><line x1="50" y1="270" x2="750" y2="270"/><line x1="50" y1="360" x2="750" y2="360"/></g><polyline fill="none" stroke="%2338bdf8" stroke-width="3" points="80,120 180,310 280,190 380,305 480,140 600,110 720,80"/><text x="60" y="50" fill="%23f8fafc" font-family="sans-serif" font-size="16" font-weight="bold">600519 贵州茅台 (日线)</text><text x="730" y="95" fill="%23ef4444" font-size="12">颈线 1650</text><text x="730" y="315" fill="%2322c55e" font-size="12">双底 1380</text></svg>`,
-  },
-  {
-    id: 'sample_triangle',
-    title: '上升收敛三角形形态',
-    subtitle: '高点平齐 + 低点持续抬高',
-    dataUrl: `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" fill="%230b0f19"><rect width="800" height="450" fill="%230b0f19"/><g stroke="%231e293b" stroke-width="1"><line x1="50" y1="90" x2="750" y2="90"/><line x1="50" y1="180" x2="750" y2="180"/><line x1="50" y1="270" x2="750" y2="270"/></g><polyline fill="none" stroke="%23ef4444" stroke-width="3" points="100,320 200,150 300,260 400,152 500,210 600,151 680,120 740,90"/><line x1="180" y1="150" x2="650" y2="150" stroke="%23f43f5e" stroke-width="2" stroke-dasharray="6,4"/><line x1="100" y1="320" x2="600" y2="210" stroke="%2310b981" stroke-width="2" stroke-dasharray="6,4"/><text x="60" y="50" fill="%23f8fafc" font-family="sans-serif" font-size="16" font-weight="bold">300750 宁德时代 (60分钟)</text><text x="730" y="155" fill="%23ef4444" font-size="12">阻力 260</text></svg>`,
-  },
-];
+import { VisionAnalysisResponse } from '../types';
 
 export const ImageAnalyzer: React.FC = () => {
-  const [selectedImage, setSelectedImage] = useState<string | null>(SAMPLE_CHARTS[0].dataUrl);
-  const [analysisResult, setAnalysisResult] = useState<VisionAnalysisResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // SVG Layer Toggles
-  const [showPatterns, setShowPatterns] = useState(true);
-  const [showKeyLevels, setShowKeyLevels] = useState(true);
-  const [showTrendlines, setShowTrendlines] = useState(true);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [mimeType, setMimeType] = useState<string>('image/jpeg');
+  const [isLoading, setIsLoading] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<VisionAnalysisResponse | null>(null);
+  const [activeTab, setActiveTab] = useState<'visual' | 'structured'>('visual');
+  const [copied, setCopied] = useState(false);
 
-  const handleFileUpload = (file: File) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     if (!file.type.startsWith('image/')) {
-      setErrorMsg('请上传有效的图片格式 (PNG, JPG, WEBP)');
+      alert('请上传有效的图片文件 (PNG, JPG, WEBP)');
       return;
     }
 
+    setMimeType(file.type);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result as string;
-      setSelectedImage(dataUrl);
+    reader.onload = () => {
+      const base64 = reader.result as string;
+      setSelectedImage(base64);
       setAnalysisResult(null);
-      setErrorMsg(null);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleAnalyze = async () => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setMimeType(file.type);
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        setSelectedImage(base64);
+        setAnalysisResult(null);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const triggerAnalyze = async () => {
     if (!selectedImage) return;
     setIsLoading(true);
-    setErrorMsg(null);
 
     try {
+      const base64Data = selectedImage.split(',')[1];
       const resp = await fetch('/api/analyze-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          imageBase64: selectedImage,
-          mimeType: selectedImage.startsWith('data:image/svg') ? 'image/png' : undefined,
+          imageBase64: base64Data,
+          mimeType: mimeType,
         }),
       });
 
       if (!resp.ok) {
-        throw new Error(`分析请求失败 (HTTP ${resp.status})`);
+        throw new Error(`HTTP error ${resp.status}`);
       }
 
-      const data: VisionAnalysisResponse = await resp.json();
+      const data = await resp.json();
       setAnalysisResult(data);
     } catch (err: any) {
       console.warn('Image analysis fallback triggered:', err);
       // Fallback response for offline / proxy restricted local development
       setAnalysisResult({
-        identifiedStock: '经典技术形态样本 (日线/60分钟)',
+        assetName: '经典技术形态样本 (日线/60分钟)',
         timeframe: '日线 / 60分钟级别',
+        trend: '反转筑底',
         patterns: [
           {
             name: '双底反转形态 (W底)',
-            category: 'reversal',
+            type: 'bullish',
             confidence: 88,
-            location: { ymin: 400, xmin: 150, ymax: 850, xmax: 800 },
-            interpretation: '价格在低位经历二次探底不破，构筑坚实双重支撑底，右侧伴随温和放量回升，颈线突破确认短期反转。',
+            box: [40, 15, 85, 80],
+            description: '价格在低位经历二次探底不破，构筑坚实双重支撑底，右侧伴随温和放量回升，颈线突破确认短期反转。',
           },
           {
             name: '均线多头修复排列',
-            category: 'trend',
+            type: 'bullish',
             confidence: 82,
-            location: { ymin: 200, xmin: 300, ymax: 550, xmax: 850 },
-            interpretation: '短期均线向上金叉中期均线，多头动能逐步占据主导，回调不破均线支撑仍属良性。',
+            box: [20, 30, 55, 85],
+            description: '短期均线向上金叉中期均线，多头动能逐步占据主导，回调不破均线支撑仍属良性。',
           },
         ],
         keyLevels: [
           {
             type: 'resistance',
-            priceLevel: '上方颈线/密集阻力区',
-            significance: 'high',
+            price: '上方颈线阻力区',
             yPercent: 30,
-            note: '前期反弹高点密集成交区，突破需量能放大配合',
+            desc: '前期反弹高点密集成交区，突破需量能放大配合',
           },
           {
             type: 'support',
-            priceLevel: '底部双重支撑区间',
-            significance: 'high',
+            price: '底部双重支撑区间',
             yPercent: 78,
-            note: '两次探底低点构筑的强支撑防线，不破维持震荡上行格局',
+            desc: '两次探底低点构筑的强支撑防线，不破维持震荡上行格局',
           },
         ],
         trendlines: [
           {
             type: 'support',
-            startPoint: { xPercent: 20, yPercent: 78 },
-            endPoint: { xPercent: 85, yPercent: 62 },
-            description: '上升趋势支撑下轨线',
+            x1: 20,
+            y1: 78,
+            x2: 85,
+            y2: 62,
+            label: '上升趋势支撑下轨线',
           },
         ],
-        volumePriceInsight: '右底回升阶段成交量较左底明显放大，呈现典型的价升量增良性量价结构，资金吸筹迹象清晰。',
+        strategy: '右底回升阶段成交量较左底明显放大，呈现典型的价升量增良性量价结构，建议逢低依托支撑位分批布局。',
         summary: '图表整体呈现明确的底部筑底与突破形态，下方双重支撑坚实。若后续能持续站稳颈线阻力，有望开启新一轮波段上行周期。',
-        disclaimer: '以上视觉形态由技术识别引擎自动标注，仅供学习与辅助研判，不构成任何投资操作建议。',
+        riskWarning: '以上视觉形态由技术识别引擎自动标注，仅供学习与辅助研判，不构成任何投资操作建议。',
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Top Banner / Explanation */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 text-white flex items-center justify-center font-bold shadow-md shadow-rose-500/20">
-              <Camera className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                图表识别模式 · AI 视觉形态解构
-                <span className="text-xs bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-mono">
-                  Gemini Vision
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                支持通达信、同花顺、雪球、TradingView等任意行情截图，自动识别经典形态并直接叠加矢量画线
-              </p>
-            </div>
-          </div>
+  const handleCopyReport = () => {
+    if (!analysisResult) return;
+    const text = `【${analysisResult.assetName || 'K线截图'} - Gemini 视觉技术形态识别报告】\n\n` +
+      `周期与趋势：${analysisResult.timeframe || '日线'} | ${analysisResult.trend || '结构演进'}\n\n` +
+      `综合形态识别：\n${analysisResult.summary}\n\n` +
+      `操作建议与关键策略：\n${analysisResult.strategy}\n\n` +
+      `风险警示：\n${analysisResult.riskWarning}`;
 
-          {/* Preset Quick Test Buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-slate-400 font-medium">示例图表体验:</span>
-            {SAMPLE_CHARTS.map((sample) => (
-              <button
-                key={sample.id}
-                onClick={() => {
-                  setSelectedImage(sample.dataUrl);
-                  setAnalysisResult(null);
-                }}
-                className="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg transition cursor-pointer"
-              >
-                {sample.title}
-              </button>
-            ))}
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg p-4 space-y-4 shadow-xl">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-[#1b2532] pb-3">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-gradient-to-br from-amber-500/20 to-orange-500/20 text-amber-400 rounded border border-amber-500/30">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              Gemini 视觉技术形态识别
+              <span className="px-1.5 py-0.2 bg-amber-500/10 text-amber-400 text-[10px] border border-amber-500/30 rounded font-normal">
+                Multimodal Vision
+              </span>
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              上传或拖拽任意交易软件（同花顺、通达信、TradingView等）的 K 线截图，智能标注头肩底、双底、趋势线与关键阻力
+            </p>
           </div>
         </div>
+
+        {analysisResult && (
+          <button
+            onClick={handleCopyReport}
+            className="flex items-center gap-1 px-2.5 py-1 text-xs bg-[#172230] hover:bg-[#1f2e41] text-slate-300 rounded border border-[#27384e] transition cursor-pointer"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copied ? '已复制' : '复制研判'}</span>
+          </button>
+        )}
       </div>
 
-      {/* Main Two-Column Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Image Canvas & SVG Overlay (7 cols) */}
-        <div className="lg:col-span-7 space-y-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
-            {/* Header & Layer Controls */}
-            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-800 text-xs">
-              <span className="font-bold text-slate-200 flex items-center gap-1.5">
-                <ImageIcon className="w-4 h-4 text-rose-400" />
-                <span>图表画布与标注叠加层</span>
-              </span>
+      {/* Upload Zone / Canvas Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Left: Upload and Image container */}
+        <div className="lg:col-span-6 space-y-3">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            accept="image/png, image/jpeg, image/webp"
+            className="hidden"
+          />
 
-              {/* Layer toggles */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowPatterns(!showPatterns)}
-                  className={`px-2 py-1 rounded text-[11px] border transition cursor-pointer ${
-                    showPatterns
-                      ? 'bg-rose-500/10 border-rose-500/40 text-rose-300'
-                      : 'border-slate-800 text-slate-400'
-                  }`}
-                >
-                  形态框
-                </button>
-                <button
-                  onClick={() => setShowKeyLevels(!showKeyLevels)}
-                  className={`px-2 py-1 rounded text-[11px] border transition cursor-pointer ${
-                    showKeyLevels
-                      ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                      : 'border-slate-800 text-slate-400'
-                  }`}
-                >
-                  关键位
-                </button>
-                <button
-                  onClick={() => setShowTrendlines(!showTrendlines)}
-                  className={`px-2 py-1 rounded text-[11px] border transition cursor-pointer ${
-                    showTrendlines
-                      ? 'bg-sky-500/10 border-sky-500/40 text-sky-300'
-                      : 'border-slate-800 text-slate-400'
-                  }`}
-                >
-                  趋势线
-                </button>
-              </div>
-            </div>
-
-            {/* Dropzone / Image Display Stage */}
+          {!selectedImage ? (
             <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragOver(true);
-              }}
-              onDragLeave={() => setIsDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-                if (e.dataTransfer.files?.[0]) {
-                  handleFileUpload(e.dataTransfer.files[0]);
-                }
-              }}
-              className={`relative min-h-[380px] bg-slate-950 rounded-xl overflow-hidden border-2 flex items-center justify-center transition ${
-                isDragOver
-                  ? 'border-rose-500 bg-rose-500/5'
-                  : 'border-dashed border-slate-800 hover:border-slate-700'
-              }`}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="border-2 border-dashed border-[#243242] hover:border-amber-500/50 rounded-lg p-8 text-center bg-[#0a0f16]/60 hover:bg-[#0f1722]/60 transition cursor-pointer flex flex-col items-center justify-center space-y-3 h-[320px]"
             >
-              {selectedImage ? (
-                <div className="relative w-full h-full flex items-center justify-center p-2">
-                  {/* Underlay Image */}
-                  <img
-                    src={selectedImage}
-                    alt="K-line Screenshot"
-                    className="max-h-[500px] w-auto max-w-full rounded-lg object-contain select-none"
-                  />
-
-                  {/* Interactive SVG Annotation Overlay */}
-                  {analysisResult && (
-                    <svg
-                      className="absolute inset-0 w-full h-full pointer-events-none"
-                      viewBox="0 0 100 100"
-                      preserveAspectRatio="none"
-                    >
-                      {/* 1. Key Levels (Horizontal Dashed Lines) */}
-                      {showKeyLevels &&
-                        analysisResult.keyLevels.map((lvl, i) => {
-                          const isSupport = lvl.type === 'support';
-                          const color = isSupport ? '#22c55e' : '#ef4444';
-                          return (
-                            <g key={`lvl-${i}`}>
-                              <line
-                                x1="2"
-                                y1={lvl.yPercent}
-                                x2="98"
-                                y2={lvl.yPercent}
-                                stroke={color}
-                                strokeWidth="0.6"
-                                strokeDasharray="2,2"
-                                opacity="0.85"
-                              />
-                              {/* Price Label Badge */}
-                              <rect
-                                x="80"
-                                y={lvl.yPercent - 2.5}
-                                width="18"
-                                height="4.5"
-                                rx="1"
-                                fill={color}
-                                opacity="0.9"
-                              />
-                              <text
-                                x="89"
-                                y={lvl.yPercent + 0.8}
-                                fill="#ffffff"
-                                fontSize="2.8"
-                                fontFamily="monospace"
-                                textAnchor="middle"
-                                fontWeight="bold"
-                              >
-                                {lvl.price}
-                              </text>
-                            </g>
-                          );
-                        })}
-
-                      {/* 2. Automatic Trendlines */}
-                      {showTrendlines &&
-                        analysisResult.trendlines.map((t, i) => {
-                          const color = t.type === 'support' ? '#22c55e' : '#38bdf8';
-                          return (
-                            <g key={`trend-${i}`}>
-                              <line
-                                x1={t.x1}
-                                y1={t.y1}
-                                x2={t.x2}
-                                y2={t.y2}
-                                stroke={color}
-                                strokeWidth="0.8"
-                                strokeDasharray="3,1.5"
-                              />
-                              <circle cx={t.x1} cy={t.y1} r="1" fill={color} />
-                              <circle cx={t.x2} cy={t.y2} r="1" fill={color} />
-                            </g>
-                          );
-                        })}
-
-                      {/* 3. Morphological Patterns (Bounding Boxes) */}
-                      {showPatterns &&
-                        analysisResult.patterns.map((p, i) => {
-                          if (!p.box) return null;
-                          const [ymin, xmin, ymax, xmax] = p.box;
-                          const width = xmax - xmin;
-                          const height = ymax - ymin;
-                          const color =
-                            p.type === 'bullish'
-                              ? '#ef4444'
-                              : p.type === 'bearish'
-                              ? '#22c55e'
-                              : '#f59e0b';
-                          return (
-                            <g key={`pat-${i}`}>
-                              <rect
-                                x={xmin}
-                                y={ymin}
-                                width={width}
-                                height={height}
-                                fill={`${color}15`}
-                                stroke={color}
-                                strokeWidth="0.7"
-                                rx="1.5"
-                              />
-                              {/* Pattern Title Tag */}
-                              <rect
-                                x={xmin}
-                                y={Math.max(2, ymin - 4.5)}
-                                width={Math.min(width, 32)}
-                                height="4.2"
-                                rx="1"
-                                fill={color}
-                              />
-                              <text
-                                x={xmin + 1}
-                                y={Math.max(2, ymin - 4.5) + 3}
-                                fill="#ffffff"
-                                fontSize="2.5"
-                                fontWeight="bold"
-                              >
-                                {p.name}
-                              </text>
-                            </g>
-                          );
-                        })}
-                    </svg>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center p-8 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-400">
-                    <Upload className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-200">拖拽K线截图至此处，或点击上传</p>
-                    <p className="text-xs text-slate-400 mt-1">支持 PNG, JPG, JPEG 格式图片</p>
-                  </div>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition cursor-pointer"
-                  >
-                    选择本地截图
-                  </button>
-                </div>
-              )}
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    handleFileUpload(e.target.files[0]);
-                  }
-                }}
-              />
-            </div>
-
-            {/* Bottom Action Bar */}
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 hover:bg-slate-800 transition cursor-pointer"
-              >
-                <Upload className="w-3.5 h-3.5" />
-                <span>更换截图</span>
-              </button>
-
-              <button
-                onClick={handleAnalyze}
-                disabled={isLoading || !selectedImage}
-                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white text-xs font-bold shadow-lg shadow-rose-600/25 flex items-center gap-2 transition cursor-pointer disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>视觉模型深度识别中...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>开始 AI 图表识别与标注</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: AI Identification Results & Strategy Breakdown (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          {analysisResult ? (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
-              {/* Asset & Trend Badge */}
-              <div className="pb-3 border-b border-slate-800 flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <span>{analysisResult.assetName}</span>
-                    <span className="text-xs font-normal text-slate-400 font-mono">
-                      ({analysisResult.timeframe})
-                    </span>
-                  </h3>
-                </div>
-                <div className="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40">
-                  {analysisResult.trend}
-                </div>
+              <div className="w-12 h-12 rounded-full bg-[#162231] flex items-center justify-center text-amber-400 border border-[#23344a]">
+                <Upload className="w-6 h-6" />
               </div>
-
-              {/* Summary */}
-              <div className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 p-3 rounded-lg border border-slate-800">
-                <span className="font-semibold text-rose-400 mr-1">【形态综述】</span>
-                {analysisResult.summary}
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-slate-200">
+                  点击上传 或 拖拽 K 线截图到此处
+                </p>
+                <p className="text-xs text-slate-400">
+                  支持 JPG, PNG, WEBP 高清截图（最大 20MB）
+                </p>
               </div>
+              <span className="inline-block px-3 py-1 bg-[#1a2636] text-amber-400 text-xs rounded-full border border-amber-500/30">
+                支持任意市场：A股 / 港美股 / 期货 / 加密资产
+              </span>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative rounded-lg overflow-hidden border border-[#223041] bg-[#070a0e] flex items-center justify-center max-h-[360px] group">
+                <img
+                  src={selectedImage}
+                  alt="Stock Kline Screenshot"
+                  className="w-full h-auto max-h-[360px] object-contain block"
+                />
 
-              {/* Detected Patterns */}
-              <div>
-                <div className="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span>识别到的形态学结构 ({analysisResult.patterns.length})</span>
-                </div>
-                <div className="space-y-2">
-                  {analysisResult.patterns.map((pat, i) => (
-                    <div
-                      key={i}
-                      className="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800 text-xs"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-slate-100">{pat.name}</span>
-                        <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-900/40">
-                          置信度 {pat.confidence}%
+                {/* Overlay visual boxes if in visual mode and analysis complete */}
+                {analysisResult && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Pattern Boxes */}
+                    {analysisResult.patterns?.map((pat, idx) => {
+                      if (!pat.box || pat.box.length < 4) return null;
+                      const [ymin, xmin, ymax, xmax] = pat.box;
+                      const isBull = pat.type === 'bullish';
+                      const color = isBull ? '#ef4444' : '#22c55e';
+
+                      return (
+                        <div
+                          key={idx}
+                          className="absolute border-2 rounded transition-all duration-300"
+                          style={{
+                            top: `${ymin}%`,
+                            left: `${xmin}%`,
+                            width: `${xmax - xmin}%`,
+                            height: `${ymax - ymin}%`,
+                            borderColor: color,
+                            backgroundColor: isBull ? 'rgba(239, 68, 68, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                          }}
+                        >
+                          <span
+                            className="absolute -top-5 left-0 px-1.5 py-0.5 text-[10px] font-bold text-white rounded whitespace-nowrap shadow"
+                            style={{ backgroundColor: color }}
+                          >
+                            {pat.name} ({pat.confidence}%)
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {/* Key level lines */}
+                    {analysisResult.keyLevels?.map((lvl, idx) => (
+                      <div
+                        key={idx}
+                        className="absolute w-full border-t-2 border-dashed flex items-center justify-end pr-2"
+                        style={{
+                          top: `${lvl.yPercent}%`,
+                          borderColor: lvl.type === 'resistance' ? 'rgba(239, 68, 68, 0.7)' : 'rgba(34, 197, 94, 0.7)',
+                        }}
+                      >
+                        <span className="text-[10px] font-mono px-1 py-0.5 bg-[#0e1319] rounded text-slate-200 border border-[#2d3f56]">
+                          {lvl.price}
                         </span>
                       </div>
-                      <p className="text-slate-400 text-[11px] leading-snug">{pat.description}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Key Levels List */}
-              <div>
-                <div className="text-xs font-bold text-slate-300 mb-2 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-sky-400" />
-                  <span>关键支撑与压力位置</span>
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 bg-[#141c26] hover:bg-[#1d2938] text-slate-300 rounded border border-[#243242] text-xs transition cursor-pointer flex items-center gap-1.5"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>更换截图</span>
+                </button>
+
+                <button
+                  onClick={triggerAnalyze}
+                  disabled={isLoading}
+                  className={`flex-1 py-1.5 px-4 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                    isLoading
+                      ? 'bg-amber-600/50 text-amber-200 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white shadow-lg shadow-amber-950/40'
+                  }`}
+                >
+                  <Sparkles className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                  <span>{isLoading ? 'Gemini 3.7 视觉深度解析中...' : '开始视觉形态深度解析'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Analysis Results Display */}
+        <div className="lg:col-span-6 bg-[#0a0f16] border border-[#1a2533] rounded-lg p-3.5 flex flex-col justify-between space-y-3 min-h-[320px]">
+          {analysisResult ? (
+            <div className="space-y-3">
+              {/* Header meta */}
+              <div className="flex items-center justify-between border-b border-[#182330] pb-2">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-100">
+                    {analysisResult.assetName || 'K线形态综合研判'}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    周期级别: <span className="text-slate-200">{analysisResult.timeframe}</span> | 结构: <span className="text-amber-400 font-bold">{analysisResult.trend}</span>
+                  </p>
                 </div>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {analysisResult.keyLevels.map((lvl, i) => (
-                    <div
-                      key={i}
-                      className="px-2.5 py-1.5 rounded bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs font-mono"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            lvl.type === 'support' ? 'bg-emerald-400' : 'bg-rose-400'
-                          }`}
-                        />
-                        <span className="text-slate-200 font-semibold">{lvl.price}</span>
-                        <span className="text-[10px] text-slate-400">({lvl.desc})</span>
-                      </div>
-                      <span
-                        className={`text-[10px] uppercase font-bold ${
-                          lvl.type === 'support' ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
+                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-xs border border-emerald-500/30 rounded font-semibold">
+                  形态已识别
+                </span>
+              </div>
+
+              {/* Identified Patterns Cards */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                  <Layers className="w-3.5 h-3.5 text-amber-400" />
+                  已识别的核心技术形态 ({analysisResult.patterns?.length || 0})
+                </span>
+                <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                  {analysisResult.patterns?.map((pat, idx) => {
+                    const isBull = pat.type === 'bullish';
+                    return (
+                      <div
+                        key={idx}
+                        className="bg-[#101722] border border-[#1f2d3d] rounded p-2 text-xs space-y-1"
                       >
-                        {lvl.type === 'support' ? '支撑' : '压力'}
-                      </span>
-                    </div>
-                  ))}
+                        <div className="flex items-center justify-between">
+                          <span className={`font-bold ${isBull ? 'text-rose-400' : 'text-emerald-400'}`}>
+                            {pat.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400">
+                            置信度: <b className="text-slate-200">{pat.confidence}%</b>
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          {pat.description}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Trading Strategy */}
-              <div className="bg-amber-950/20 border border-amber-900/40 p-3 rounded-lg text-xs space-y-1">
-                <div className="font-bold text-amber-300 flex items-center gap-1.5">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>交易应对策略建议</span>
-                </div>
-                <p className="text-amber-200/90 text-[11px] leading-relaxed">
+              {/* Strategic Insights */}
+              <div className="space-y-1">
+                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1">
+                  <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
+                  量价结构与操作策略
+                </span>
+                <p className="text-xs text-slate-300 leading-relaxed bg-[#121a24] p-2 rounded border border-[#1d2a3a]">
                   {analysisResult.strategy}
                 </p>
               </div>
 
-              {/* Risk warning */}
-              <div className="text-[10px] text-slate-400 leading-relaxed border-t border-slate-800 pt-2">
-                {analysisResult.riskWarning}
+              {/* Summary */}
+              <div className="text-[11px] text-slate-400 bg-[#0d131c] p-2 rounded border border-[#16202c]">
+                <b className="text-slate-300">形态总结: </b>{analysisResult.summary}
               </div>
+
+              {/* Disclaimer */}
+              <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                <ShieldAlert className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                <span>{analysisResult.riskWarning}</span>
+              </p>
             </div>
           ) : (
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 shadow-lg text-center space-y-3">
-              <div className="w-12 h-12 rounded-full bg-slate-800/50 border border-slate-700 flex items-center justify-center mx-auto text-slate-400">
-                <Sparkles className="w-6 h-6 text-rose-400" />
-              </div>
-              <h3 className="text-sm font-bold text-slate-200">等待执行图表识别</h3>
-              <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed">
-                点击左侧"开始 AI 图表识别与标注"按钮，Claude/Gemini 视觉引擎将自动解构K线高低点、形态边界框并回传矢量坐标。
+            <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2 text-slate-400">
+              <Compass className="w-8 h-8 text-slate-400 animate-pulse" />
+              <p className="text-xs font-medium text-slate-400">
+                {isLoading ? 'Gemini 3.7 模型正在逐行识别 K 线高低点与形态...' : '请在左侧上传 K 线截图后点击开始解析'}
+              </p>
+              <p className="text-[11px] text-slate-400 max-w-xs">
+                支持头肩顶底、双底/双顶、旗形整理、三角形收敛、上升通道、缺口回补等 20+ 种专业量化形态
               </p>
             </div>
           )}
         </div>
       </div>
-
-      {errorMsg && (
-        <div className="p-3.5 bg-red-950/40 border border-red-800 rounded-xl text-xs text-red-300 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{errorMsg}</span>
-        </div>
-      )}
     </div>
   );
 };

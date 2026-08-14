@@ -63,7 +63,26 @@ export const STOCK_PRICE_MAP: Record<string, { price: number; name: string; isIn
 };
 
 /**
- * Generates synthetic realistic A-share candlestick series
+ * Returns Beijing/China Date object (UTC+8)
+ */
+export function getBeijingDate(): Date {
+  const now = new Date();
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  return new Date(utc + 3600000 * 8);
+}
+
+/**
+ * Formats a Date to YYYY-MM-DD in Beijing timezone
+ */
+export function formatBeijingDateStr(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Generates synthetic realistic A-share candlestick series anchored strictly to today's China date
  */
 export function generateMockKline(
   basePrice = 100,
@@ -73,46 +92,78 @@ export function generateMockKline(
 ): KlinePoint[] {
   const points: KlinePoint[] = [];
   let price = basePrice;
-  const now = new Date();
-  
-  // Create realistic trend structure: cyclical wave with random walk
-  for (let i = count - 1; i >= 0; i--) {
-    let d = new Date(now.getTime());
-    let timeStr = '';
+  const bjNow = getBeijingDate();
 
-    if (period === 'day') {
-      d.setDate(d.getDate() - i * 1.4); // skip weekends approximately
-      // ensure weekday
-      if (d.getDay() === 0) d.setDate(d.getDate() - 2);
-      if (d.getDay() === 6) d.setDate(d.getDate() - 1);
-      timeStr = d.toISOString().split('T')[0];
-    } else {
-      const minutesBack = i * (period === '1m' ? 1 : period === '5m' ? 5 : period === '15m' ? 15 : period === '30m' ? 30 : 60);
-      d.setMinutes(d.getMinutes() - minutesBack);
-      timeStr = `${d.toISOString().split('T')[0]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  if (period === 'day') {
+    // Generate business trading days strictly up to today (e.g. 2026-08-14)
+    const tradeDays: string[] = [];
+    const curr = new Date(bjNow.getTime());
+    
+    while (tradeDays.length < count) {
+      const dayOfWeek = curr.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        tradeDays.unshift(formatBeijingDateStr(curr));
+      }
+      curr.setDate(curr.getDate() - 1);
     }
 
-    const wave = Math.sin((count - i) / 12) * 0.008;
-    const changePct = (Math.random() - 0.49) * volatility * 2 + wave;
-    const open = price;
-    const close = Number((open * (1 + changePct)).toFixed(2));
-    const range = Math.abs(close - open) + open * volatility * 0.5 * Math.random();
-    const high = Number((Math.max(open, close) + range * Math.random()).toFixed(2));
-    const low = Number((Math.min(open, close) - range * Math.random()).toFixed(2));
-    const volume = Math.round(30000 + Math.random() * 80000 + (Math.abs(close - open) / open) * 300000);
-    const turnover = Math.round(volume * close * 100);
+    for (let i = 0; i < tradeDays.length; i++) {
+      const timeStr = tradeDays[i];
+      const wave = Math.sin(i / 12) * 0.008;
+      const changePct = (Math.random() - 0.49) * volatility * 2 + wave;
+      const open = price;
+      const close = Number((open * (1 + changePct)).toFixed(2));
+      const range = Math.abs(close - open) + open * volatility * 0.5 * Math.random();
+      const high = Number((Math.max(open, close) + range * Math.random()).toFixed(2));
+      const low = Number((Math.min(open, close) - range * Math.random()).toFixed(2));
+      const volume = Math.round(30000 + Math.random() * 80000 + (Math.abs(close - open) / open) * 300000);
+      const turnover = Math.round(volume * close * 100);
 
-    points.push({
-      time: timeStr,
-      open,
-      high,
-      low,
-      close,
-      volume,
-      turnover,
-    });
+      points.push({
+        time: timeStr,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        turnover,
+      });
 
-    price = close;
+      price = close;
+    }
+  } else {
+    // Minute periods
+    for (let i = count - 1; i >= 0; i--) {
+      const d = new Date(bjNow.getTime());
+      const stepMins = period === '1m' ? 1 : period === '5m' ? 5 : period === '15m' ? 15 : period === '30m' ? 30 : 60;
+      d.setMinutes(d.getMinutes() - i * stepMins);
+      const ymd = formatBeijingDateStr(d);
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      const timeStr = `${ymd} ${hh}:${mm}`;
+
+      const wave = Math.sin((count - i) / 12) * 0.008;
+      const changePct = (Math.random() - 0.49) * volatility * 2 + wave;
+      const open = price;
+      const close = Number((open * (1 + changePct)).toFixed(2));
+      const range = Math.abs(close - open) + open * volatility * 0.5 * Math.random();
+      const high = Number((Math.max(open, close) + range * Math.random()).toFixed(2));
+      const low = Number((Math.min(open, close) - range * Math.random()).toFixed(2));
+      const volume = Math.round(30000 + Math.random() * 80000 + (Math.abs(close - open) / open) * 300000);
+      const turnover = Math.round(volume * close * 100);
+
+      points.push({
+        time: timeStr,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        turnover,
+      });
+
+      price = close;
+    }
   }
 
   // Deduplicate timestamps just in case

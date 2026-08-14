@@ -80,7 +80,6 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
         keyLevels: `关键攻防策略：下方核心支撑参考 ${supStr}，上方短线重要阻力参考 ${resStr}。在有效突破阻力或跌破支撑前建议以区间思路防守。`,
         riskNotice: `免责声明与风险警示：本分析基于多周期技术指标与量化形态算法生成。证券市场具有不确定性，技术指标仅供参考，不构成任何投资买卖建议。`,
         confidenceScore: 85,
-        source: 'local-engine',
         generatedAt: new Date().toLocaleTimeString('zh-CN'),
       });
     } finally {
