@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header } from './components/Header';
 import { KlineChart } from './components/KlineChart';
 import { IndicatorPulse } from './components/IndicatorPulse';
@@ -10,15 +10,15 @@ import {
   MarketIndexItem,
   KlinePeriod,
   TechnicalJudgment,
+  StockSearchResult,
 } from './types';
 import { HOT_STOCKS } from '../lib/sampleData';
-import { formatPrice, formatVolume, formatAmount } from '../lib/stockCode';
+import { formatPrice } from '../lib/stockCode';
 import { generateTechnicalJudgment } from '../lib/judgment';
-import { TrendingUp, TrendingDown, RefreshCw, AlertCircle, Sparkles, Activity } from 'lucide-react';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'indicator' | 'image'>('indicator');
-  const [currentCode, setCurrentCode] = useState<string>('600519');
+  const [currentCode, setCurrentCode] = useState<string>('600693'); // Default to 东百集团 matching screenshot
   const [currentPeriod, setCurrentPeriod] = useState<KlinePeriod>('day');
 
   const [quote, setQuote] = useState<StockQuote | null>(null);
@@ -26,8 +26,17 @@ export default function App() {
   const [marketIndices, setMarketIndices] = useState<MarketIndexItem[]>([]);
   const [judgment, setJudgment] = useState<TechnicalJudgment | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Quick view stock list
+  const quickStocks = [
+    { name: '贵州茅台', code: '600519' },
+    { name: '平安银行', code: '000001' },
+    { name: '宁德时代', code: '300750' },
+    { name: '中国平安', code: '601318' },
+  ];
 
   // 1. Fetch Market Overview Indices
   const loadMarketIndices = useCallback(async () => {
@@ -44,7 +53,7 @@ export default function App() {
 
   useEffect(() => {
     loadMarketIndices();
-    const interval = setInterval(loadMarketIndices, 30000); // 30s auto-refresh
+    const interval = setInterval(loadMarketIndices, 30000);
     return () => clearInterval(interval);
   }, [loadMarketIndices]);
 
@@ -87,11 +96,52 @@ export default function App() {
     setCurrentPeriod(p);
   };
 
+  const handleSearchSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    // Check if directly a 6-digit code
+    const cleanDigits = q.replace(/[^0-9]/g, '');
+    if (cleanDigits.length === 6) {
+      setCurrentCode(cleanDigits);
+      return;
+    }
+
+    // Try online search
+    try {
+      const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.results && data.results.length > 0) {
+          setCurrentCode(data.results[0].code);
+          return;
+        }
+      }
+    } catch {
+      // fallback
+    }
+
+    // Fallback direct
+    setCurrentCode(q);
+  };
+
   const isUp = (quote?.changePercent ?? 0) >= 0;
 
+  const periods: { id: KlinePeriod; label: string }[] = [
+    { id: 'day', label: '日线' },
+    { id: '1m', label: '1分' },
+    { id: '5m', label: '5分' },
+    { id: '15m', label: '15分' },
+    { id: '30m', label: '30分' },
+    { id: '60m', label: '60分' },
+    { id: '90m', label: '90分' },
+    { id: '120m', label: '120分' },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-rose-500/30 selection:text-rose-200">
-      {/* Navigation Header */}
+    <div className="min-h-screen bg-[#070a0e] text-slate-100 flex flex-col font-sans">
+      {/* Top Header */}
       <Header
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -101,117 +151,104 @@ export default function App() {
         isLoading={isLoading}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-4 space-y-4">
+      {/* Main Container */}
+      <main className="flex-1 max-w-[1680px] w-full mx-auto px-6 py-4 space-y-4">
         {currentTab === 'indicator' ? (
           <>
-            {/* Quick Stock Switcher Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs scrollbar-none">
-              <span className="text-slate-400 font-medium whitespace-nowrap shrink-0 flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5 text-rose-400" />
-                <span>精选自选:</span>
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {HOT_STOCKS.map((stock) => (
-                  <button
-                    key={stock.code}
-                    onClick={() => handleSelectStock(stock.code)}
-                    className={`px-3 py-1.5 rounded-lg border transition font-medium cursor-pointer flex items-center gap-1.5 ${
-                      currentCode === stock.code
-                        ? 'bg-rose-500/20 border-rose-500/60 text-rose-300 shadow-sm'
-                        : 'bg-slate-900/80 border-slate-800 text-slate-300 hover:bg-slate-800 hover:text-white'
-                    }`}
-                  >
-                    <span>{stock.name}</span>
-                    <span className="font-mono text-[10px] text-slate-400">{stock.code}</span>
-                  </button>
-                ))}
+            {/* Search Bar & Quick Switch Bar matching screenshot */}
+            <div className="space-y-2">
+              <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 max-w-md">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={quote?.name || '输入股票名称/代码...'}
+                  className="flex-1 bg-[#10161f] border border-[#222d3a] focus:border-[#d4a038] rounded-md px-3.5 py-2 text-sm text-white placeholder-slate-400 outline-none transition"
+                />
+                <button
+                  type="submit"
+                  className="bg-[#d4a038] hover:bg-[#c4932f] text-black font-semibold text-xs px-5 py-2.5 rounded-md transition cursor-pointer shrink-0"
+                >
+                  查询
+                </button>
+              </form>
+
+              {/* Quick View list */}
+              <div className="flex items-center gap-2 text-xs text-slate-400 pt-0.5">
+                <span>快速查看:</span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {quickStocks.map((s) => (
+                    <button
+                      key={s.code}
+                      onClick={() => handleSelectStock(s.code)}
+                      className={`px-2.5 py-1 rounded border transition text-xs cursor-pointer ${
+                        currentCode === s.code
+                          ? 'bg-[#1a2330] border-[#d4a038]/60 text-white'
+                          : 'bg-[#10161f] border-[#1d2733] text-slate-300 hover:border-slate-600 hover:text-white'
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Current Stock Snapshot Card */}
-            {quote && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-lg">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                  {/* Left: Main Price & Stock Name */}
-                  <div className="flex items-center gap-4 flex-wrap">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-white tracking-tight">{quote.name}</h2>
-                        <span className="font-mono text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded">
-                          {quote.fullCode || quote.code}
-                        </span>
-                        {quote.isIndex && (
-                          <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded">
-                            大盘指数
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
-                        <span>A股市场交易中</span>
-                        <span>·</span>
-                        <span>更新于 {new Date(quote.timestamp).toLocaleTimeString('zh-CN')}</span>
-                      </div>
-                    </div>
-
-                    {/* Price and change badge */}
-                    <div className="flex items-baseline gap-3 pl-2 sm:border-l sm:border-slate-800">
-                      <div
-                        className={`text-2xl sm:text-3xl font-black font-mono-num tracking-tight ${
+            {/* Main Terminal Layout: Left Chart Column (68%) + Right Technical Panel (32%) */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+              {/* Left Column: Stock Header + Period Tabs + Indicator Bar + K-Line Chart */}
+              <div className="lg:col-span-8 xl:col-span-8 space-y-3">
+                {/* Stock Title & Period Tabs */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  {/* Stock Info */}
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <h2 className="text-xl font-bold text-white tracking-wide">
+                      {quote?.name || '东百集团'}
+                    </h2>
+                    <span className="font-mono text-xs text-slate-400">
+                      {quote?.code || '600693'}
+                    </span>
+                    <div className="flex items-baseline gap-2 pl-2">
+                      <span
+                        className={`text-xl font-black font-mono tracking-tight ${
                           isUp ? 'text-rose-400' : 'text-emerald-400'
                         }`}
                       >
-                        ¥{formatPrice(quote.price)}
-                      </div>
-                      <div
-                        className={`flex items-center gap-1 text-sm font-bold font-mono-num px-2.5 py-1 rounded-md ${
-                          isUp
-                            ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                            : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        {quote ? formatPrice(quote.price) : '9.45'}
+                      </span>
+                      <span
+                        className={`text-xs font-mono font-bold ${
+                          isUp ? 'text-rose-400' : 'text-emerald-400'
                         }`}
                       >
-                        {isUp ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                        <span>{isUp ? '+' : ''}{quote.change.toFixed(2)}</span>
-                        <span>({isUp ? '+' : ''}{quote.changePercent.toFixed(2)}%)</span>
-                      </div>
+                        {quote ? (isUp ? '+' : '') + quote.change.toFixed(2) : '-1.03'} (
+                        {quote ? (isUp ? '+' : '') + quote.changePercent.toFixed(2) : '-9.83'}%)
+                      </span>
                     </div>
                   </div>
 
-                  {/* Right: Key Quote Financial Stats */}
-                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-xs border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-800">
-                    <div>
-                      <div className="text-slate-400">今开</div>
-                      <div className="font-mono-num font-semibold text-slate-200">{formatPrice(quote.open)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400">最高</div>
-                      <div className="font-mono-num font-semibold text-rose-400">{formatPrice(quote.high)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400">最低</div>
-                      <div className="font-mono-num font-semibold text-emerald-400">{formatPrice(quote.low)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400">昨收</div>
-                      <div className="font-mono-num font-semibold text-slate-200">{formatPrice(quote.prevClose)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400">成交量</div>
-                      <div className="font-mono-num font-semibold text-slate-200">{formatVolume(quote.volume)}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-400">成交额</div>
-                      <div className="font-mono-num font-semibold text-slate-200">{formatAmount(quote.turnover)}</div>
-                    </div>
+                  {/* Period Switcher Tabs */}
+                  <div className="flex items-center bg-[#10161f] p-0.5 rounded border border-[#1d2733] shrink-0">
+                    {periods.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => handlePeriodChange(p.id)}
+                        className={`px-2.5 py-1 text-xs font-medium transition cursor-pointer rounded ${
+                          currentPeriod === p.id
+                            ? 'bg-[#1b2532] text-[#d4a038] font-semibold border border-[#2b394b]'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Split Screen Layout for Modern Finance Terminal */}
-            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
-              {/* Left Column: Interactive K-Line Chart & Indicator Wave (8 cols on XL) */}
-              <div className="xl:col-span-8 space-y-4">
+                {/* 5 Indicator Pulse Row */}
+                <IndicatorPulse judgment={judgment} />
+
+                {/* Interactive K-Line Canvas Chart */}
                 <KlineChart
                   data={klineData}
                   period={currentPeriod}
@@ -219,11 +256,10 @@ export default function App() {
                   stockName={quote?.name}
                   stockCode={quote?.code}
                 />
-                <IndicatorPulse judgment={judgment} />
               </div>
 
-              {/* Right Column: Quantitative Judgment & AI Interpretation (4 cols on XL) */}
-              <div className="xl:col-span-4 space-y-4">
+              {/* Right Column: Technical Judgment & AI Analysis Panel */}
+              <div className="lg:col-span-4 xl:col-span-4 h-full">
                 <JudgmentPanel
                   judgment={judgment}
                   quote={quote}
@@ -238,18 +274,6 @@ export default function App() {
           <ImageAnalyzer />
         )}
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 space-y-2">
-          <p className="font-medium text-slate-400">
-            读势 · TrendIQ - A股多周期技术分析与AI智能视觉形态研判系统
-          </p>
-          <p className="text-[11px] text-slate-400 max-w-2xl mx-auto">
-            免责声明：本终端所呈现的技术指标、形态识别及AI智能研判仅供量化技术研究与行情观察参考，不代表任何形式的投资建议或买卖依据。证券投资有风险，入市需谨慎。
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }
