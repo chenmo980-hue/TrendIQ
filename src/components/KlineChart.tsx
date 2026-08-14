@@ -20,7 +20,7 @@ import {
   detectSupportResistance,
   detectTrendlines,
 } from '../../lib/indicators';
-import { ZoomIn, ZoomOut, RotateCcw, Sliders } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface KlineChartProps {
   data: KlinePoint[];
@@ -57,9 +57,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Viewport / Zoom & Pan state
-  const [zoomIndex, setZoomIndex] = useState(0); // offset from right (0 = latest)
-  const [visibleCount, setVisibleCount] = useState(80);
+  // Viewport / Zoom & Pan state:
+  // rightOffset: 0 means normal anchor at right edge.
+  // rightOffset < 0 (e.g. -5 to -30) means dragged to the right, creating blank space on the right side.
+  // rightOffset > 0 means viewing historical candles to the left.
+  const [rightOffset, setRightOffset] = useState<number>(-8); // default to -8 candles of right blank space (classic TradingView/TongDaXin feel)
+  const [visibleCount, setVisibleCount] = useState(70);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartX, setDragStartX] = useState(0);
 
@@ -83,13 +86,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const [showSupportResistance, setShowSupportResistance] = useState(true);
   const [showTrendlines, setShowTrendlines] = useState(true);
   const [subIndicator, setSubIndicator] = useState<'MACD' | 'RSI' | 'KDJ'>('MACD');
-  const [showMASettings, setShowMASettings] = useState(false);
 
-  // Reset zoom and anchor to the latest candle on period or stock change
+  // Reset offset to comfortable right-padded space (-8) on period or stock change
   useEffect(() => {
-    setZoomIndex(0);
+    setRightOffset(-8);
     setHoverIndex(null);
-  }, [period, stockCode, data.length]);
+  }, [period, stockCode]);
 
   // Precalculate technical indicators
   const mas = useMemo(() => calculateAllMA(data), [data]);
@@ -97,20 +99,20 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   const rsi = useMemo(() => calculateRSI(data), [data]);
   const boll = useMemo(() => calculateBOLL(data), [data]);
   const kdj = useMemo(() => calculateKDJ(data), [data]);
-  const { supports, resistances, levels } = useMemo(() => detectSupportResistance(data), [data]);
+  const { supports, resistances } = useMemo(() => detectSupportResistance(data), [data]);
   const trendlines = useMemo(() => detectTrendlines(data), [data]);
 
-  // Adjust visible bounds
   const total = data.length;
-  const safeZoom = Math.min(Math.max(0, zoomIndex), Math.max(0, total - 10));
-  const endIndex = Math.min(total, total - safeZoom);
-  const startIndex = Math.max(0, endIndex - visibleCount);
-  const visibleData = useMemo(() => data.slice(startIndex, endIndex), [data, startIndex, endIndex]);
+
+  // Calculate visible range based on rightOffset (can be negative, which leaves blank room on right)
+  // safeEndIndex: the candle index corresponding to the right edge of viewport
+  const safeEndIndex = Math.min(total, total - rightOffset);
+  const safeStartIndex = Math.max(0, safeEndIndex - visibleCount);
 
   // Active candle to show in HUD (hovered or latest)
-  const activeIndex = hoverIndex !== null && hoverIndex >= startIndex && hoverIndex < endIndex
+  const activeIndex = hoverIndex !== null && hoverIndex >= 0 && hoverIndex < total
     ? hoverIndex
-    : endIndex - 1;
+    : total - 1;
   const activeCandle = data[activeIndex] || data[data.length - 1];
 
   const toggleMA = (periodNum: number) => {
@@ -123,7 +125,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   // Draw chart on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !containerRef.current || visibleData.length === 0) return;
+    if (!canvas || !containerRef.current || total === 0) return;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -141,14 +143,10 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
     ctx.scale(dpr, dpr);
 
-    // Layout configuration with right margin buffer for latest candle
+    // Layout configuration
     const padding = { top: 25, right: 65, bottom: 25, left: 10 };
     const chartWidth = width - padding.left - padding.right;
     const totalHeight = height - padding.top - padding.bottom;
-
-    // Dedicated right padding space (20px) so the latest candle is completely visible
-    const rightBufferPx = 20;
-    const candleAreaWidth = Math.max(10, chartWidth - rightBufferPx);
 
     // 3 vertically stacked regions: Main K-line (58%), Volume (18%), Sub-indicator (24%)
     const gap = 12;
@@ -164,12 +162,26 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     ctx.fillStyle = '#0b0f19';
     ctx.fillRect(0, 0, width, height);
 
-    // 1. Calculate price range for main chart
+    // Calculate slot width based on visibleCount
+    const step = chartWidth / Math.max(1, visibleCount);
+    const candleWidth = Math.max(2, Math.min(24, step * 0.72));
+
+    // Coordinate mapping helper:
+    // Slot 0 starts at (safeEndIndex - visibleCount)
+    const getX = (idx: number) => {
+      const slotIndex = idx - (safeEndIndex - visibleCount);
+      return padding.left + slotIndex * step + step / 2;
+    };
+
+    // Calculate price range for all visible candles
     let minPrice = Infinity;
     let maxPrice = -Infinity;
     let maxVol = 0;
 
-    for (let i = startIndex; i < endIndex; i++) {
+    const renderStartIndex = Math.max(0, safeEndIndex - visibleCount);
+    const renderEndIndex = Math.min(total, safeEndIndex);
+
+    for (let i = renderStartIndex; i < renderEndIndex; i++) {
       const p = data[i];
       if (!p) continue;
       if (p.low < minPrice) minPrice = p.low;
@@ -198,18 +210,11 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       maxPrice = 100;
     }
 
-    // Add 5% headroom to price scale
+    // Add 6% headroom to price scale
     const priceRange = maxPrice - minPrice || 1;
-    const paddedMinPrice = minPrice - priceRange * 0.05;
-    const paddedMaxPrice = maxPrice + priceRange * 0.05;
+    const paddedMinPrice = minPrice - priceRange * 0.06;
+    const paddedMaxPrice = maxPrice + priceRange * 0.06;
     const finalPriceRange = paddedMaxPrice - paddedMinPrice;
-
-    // Helper functions for coordinates
-    const step = candleAreaWidth / Math.max(1, visibleData.length);
-    const getX = (idx: number) => {
-      const relIdx = idx - startIndex;
-      return padding.left + relIdx * step + step / 2;
-    };
 
     const getPriceY = (price: number) => {
       return mainY + (1 - (price - paddedMinPrice) / finalPriceRange) * mainHeight;
@@ -219,8 +224,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       const safeMax = maxVol || 1;
       return volY + (1 - vol / safeMax) * volHeight;
     };
-
-    const candleWidth = Math.max(2, Math.min(22, step * 0.72));
 
     // Grid lines & Axis lines
     ctx.strokeStyle = '#1e293b';
@@ -298,13 +301,17 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     }
 
     // 3. Draw Candlesticks and Volume Bars
-    let highestCandle = { idx: startIndex, price: -Infinity };
-    let lowestCandle = { idx: startIndex, price: Infinity };
+    let highestCandle = { idx: renderStartIndex, price: -Infinity };
+    let lowestCandle = { idx: renderStartIndex, price: Infinity };
 
-    for (let i = startIndex; i < endIndex; i++) {
+    for (let i = renderStartIndex; i < renderEndIndex; i++) {
       const p = data[i];
       if (!p) continue;
       const x = getX(i);
+
+      // Only draw if within horizontal bounds
+      if (x < padding.left - candleWidth || x > padding.left + chartWidth + candleWidth) continue;
+
       const isUp = p.close >= p.open;
       const candleColor = isUp ? '#ef4444' : '#22c55e';
 
@@ -339,18 +346,22 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     if (highestCandle.price !== -Infinity) {
       const hx = getX(highestCandle.idx);
       const hy = getPriceY(highestCandle.price);
-      const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, hx - 20));
-      ctx.fillStyle = '#f59e0b';
-      ctx.font = labelFont;
-      ctx.fillText(`▲ 高 ${highestCandle.price}`, textX, Math.max(mainY + 12, hy - 4));
+      if (hx >= padding.left && hx <= padding.left + chartWidth) {
+        const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, hx - 20));
+        ctx.fillStyle = '#f59e0b';
+        ctx.font = labelFont;
+        ctx.fillText(`▲ 高 ${highestCandle.price}`, textX, Math.max(mainY + 12, hy - 4));
+      }
     }
     if (lowestCandle.price !== Infinity) {
       const lx = getX(lowestCandle.idx);
       const ly = getPriceY(lowestCandle.price);
-      const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, lx - 20));
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = labelFont;
-      ctx.fillText(`▼ 低 ${lowestCandle.price}`, textX, Math.min(mainY + mainHeight - 4, ly + 14));
+      if (lx >= padding.left && lx <= padding.left + chartWidth) {
+        const textX = Math.min(padding.left + chartWidth - 55, Math.max(padding.left + 5, lx - 20));
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = labelFont;
+        ctx.fillText(`▼ 低 ${lowestCandle.price}`, textX, Math.min(mainY + mainHeight - 4, ly + 14));
+      }
     }
 
     // 4. Draw Bollinger Bands
@@ -360,7 +371,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.lineWidth = 1;
         ctx.beginPath();
         let started = false;
-        for (let i = startIndex; i < endIndex; i++) {
+        for (let i = renderStartIndex; i < renderEndIndex; i++) {
           const val = lineData[i];
           if (val === null) continue;
           const x = getX(i);
@@ -387,7 +398,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.lineWidth = 1.3;
         ctx.beginPath();
         let started = false;
-        for (let i = startIndex; i < endIndex; i++) {
+        for (let i = renderStartIndex; i < renderEndIndex; i++) {
           const val = maData[i];
           if (val === null || val === undefined) continue;
           const x = getX(i);
@@ -412,10 +423,10 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     // 6. Draw Auto Trendlines
     if (showTrendlines && trendlines.length > 0) {
       for (const line of trendlines) {
-        if (line.endIndex < startIndex || line.startIndex > endIndex) continue;
-        const x1 = getX(Math.max(startIndex, line.startIndex));
+        if (line.endIndex < renderStartIndex || line.startIndex > renderEndIndex) continue;
+        const x1 = getX(Math.max(renderStartIndex, line.startIndex));
         const y1 = getPriceY(line.startPrice);
-        const x2 = getX(Math.min(endIndex - 1, line.endIndex));
+        const x2 = getX(Math.min(renderEndIndex - 1, line.endIndex));
         const y2 = getPriceY(line.endPrice);
 
         ctx.strokeStyle = line.type === 'support' ? 'rgba(74, 222, 128, 0.8)' : 'rgba(244, 63, 94, 0.8)';
@@ -432,7 +443,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     // 7. Draw Sub-Indicator (MACD / RSI / KDJ)
     if (subIndicator === 'MACD') {
       let maxMacdAbs = 0.01;
-      for (let i = startIndex; i < endIndex; i++) {
+      for (let i = renderStartIndex; i < renderEndIndex; i++) {
         const d = macd.dif[i];
         const a = macd.dea[i];
         const m = macd.macd[i];
@@ -452,7 +463,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       ctx.stroke();
 
       // MACD Histogram bars
-      for (let i = startIndex; i < endIndex; i++) {
+      for (let i = renderStartIndex; i < renderEndIndex; i++) {
         const m = macd.macd[i];
         if (m === null) continue;
         const x = getX(i);
@@ -466,7 +477,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       ctx.lineWidth = 1.2;
       ctx.beginPath();
       let started = false;
-      for (let i = startIndex; i < endIndex; i++) {
+      for (let i = renderStartIndex; i < renderEndIndex; i++) {
         const d = macd.dif[i];
         if (d === null) continue;
         const x = getX(i);
@@ -479,7 +490,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       ctx.strokeStyle = '#38bdf8';
       ctx.beginPath();
       started = false;
-      for (let i = startIndex; i < endIndex; i++) {
+      for (let i = renderStartIndex; i < renderEndIndex; i++) {
         const a = macd.dea[i];
         if (a === null) continue;
         const x = getX(i);
@@ -513,7 +524,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         let started = false;
-        for (let i = startIndex; i < endIndex; i++) {
+        for (let i = renderStartIndex; i < renderEndIndex; i++) {
           const r = rsiArr[i];
           if (r === null) continue;
           const x = getX(i);
@@ -538,7 +549,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         let started = false;
-        for (let i = startIndex; i < endIndex; i++) {
+        for (let i = renderStartIndex; i < renderEndIndex; i++) {
           const val = arr[i];
           if (val === null) continue;
           const x = getX(i);
@@ -562,62 +573,68 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     ctx.font = monoFont;
     ctx.textAlign = 'center';
 
-    const dateStep = Math.max(1, Math.floor(visibleData.length / 5));
-    for (let i = 0; i < visibleData.length; i += dateStep) {
-      const item = visibleData[i];
+    const visibleLen = renderEndIndex - renderStartIndex;
+    const dateStep = Math.max(1, Math.floor(visibleLen / 5));
+    for (let i = 0; i < visibleLen; i += dateStep) {
+      const item = data[renderStartIndex + i];
       if (!item) continue;
-      const x = getX(startIndex + i);
-      const displayDate = item.time.includes(' ') ? item.time.split(' ')[1] : item.time.slice(5);
-      ctx.fillText(displayDate, x, height - 8);
+      const x = getX(renderStartIndex + i);
+      if (x >= padding.left && x <= padding.left + chartWidth) {
+        const displayDate = item.time.includes(' ') ? item.time.split(' ')[1] : item.time.slice(5);
+        ctx.fillText(displayDate, x, height - 8);
+      }
     }
 
     // 9. Draw Crosshair Hover Line
-    if (mousePos && hoverIndex !== null && hoverIndex >= startIndex && hoverIndex < endIndex) {
+    if (mousePos && hoverIndex !== null && hoverIndex >= 0 && hoverIndex < total) {
       const x = getX(hoverIndex);
       const y = Math.min(subY + subHeight, Math.max(mainY, mousePos.y));
 
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-      ctx.setLineDash([3, 3]);
+      if (x >= padding.left && x <= padding.left + chartWidth) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.setLineDash([3, 3]);
 
-      // Vertical line
-      ctx.beginPath();
-      ctx.moveTo(x, mainY);
-      ctx.lineTo(x, subY + subHeight);
-      ctx.stroke();
-
-      // Horizontal line in main chart
-      if (mousePos.y <= mainY + mainHeight) {
+        // Vertical line
         ctx.beginPath();
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.moveTo(x, mainY);
+        ctx.lineTo(x, subY + subHeight);
         ctx.stroke();
 
-        // Price bubble on Y axis
-        const hoverPrice = paddedMaxPrice - ((y - mainY) / mainHeight) * finalPriceRange;
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(padding.left + chartWidth + 2, y - 9, 58, 18);
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'left';
-        ctx.fillText(hoverPrice.toFixed(2), padding.left + chartWidth + 6, y + 3);
-      }
+        // Horizontal line in main chart
+        if (mousePos.y <= mainY + mainHeight) {
+          ctx.beginPath();
+          ctx.moveTo(padding.left, y);
+          ctx.lineTo(padding.left + chartWidth, y);
+          ctx.stroke();
 
-      // Date bubble on X axis
-      const p = data[hoverIndex];
-      if (p) {
-        ctx.fillStyle = '#334155';
-        ctx.fillRect(x - 40, height - 20, 80, 16);
-        ctx.fillStyle = '#f8fafc';
-        ctx.textAlign = 'center';
-        ctx.fillText(p.time, x, height - 8);
-      }
+          // Price bubble on Y axis
+          const hoverPrice = paddedMaxPrice - ((y - mainY) / mainHeight) * finalPriceRange;
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(padding.left + chartWidth + 2, y - 9, 58, 18);
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'left';
+          ctx.fillText(hoverPrice.toFixed(2), padding.left + chartWidth + 6, y + 3);
+        }
 
-      ctx.setLineDash([]);
+        // Date bubble on X axis
+        const p = data[hoverIndex];
+        if (p) {
+          ctx.fillStyle = '#334155';
+          ctx.fillRect(x - 40, height - 20, 80, 16);
+          ctx.fillStyle = '#f8fafc';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.time, x, height - 8);
+        }
+
+        ctx.setLineDash([]);
+      }
     }
   }, [
     data,
-    visibleData,
-    startIndex,
-    endIndex,
+    total,
+    safeEndIndex,
+    visibleCount,
+    rightOffset,
     showMA,
     activeMAs,
     showBOLL,
@@ -638,7 +655,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
   // Mouse event handlers for pan, zoom, hover
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!containerRef.current || data.length === 0) return;
+    if (!containerRef.current || total === 0) return;
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -646,24 +663,32 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
     const padding = { left: 10, right: 65 };
     const chartWidth = rect.width - padding.left - padding.right;
-    const rightBufferPx = 20;
-    const candleAreaWidth = Math.max(10, chartWidth - rightBufferPx);
 
-    if (x >= padding.left && x <= padding.left + chartWidth) {
-      const relX = x - padding.left;
-      const step = candleAreaWidth / Math.max(1, visibleData.length);
-      const indexOffset = Math.floor(relX / step);
-      const computedIndex = Math.min(endIndex - 1, Math.max(startIndex, startIndex + indexOffset));
-      setHoverIndex(computedIndex);
-    }
-
-    // Handle dragging/panning
+    // Interactive dragging/panning: 
+    // Moving mouse to the right -> negative offset (revealing right blank space / dragging chart rightwards)
+    // Moving mouse to the left -> positive offset (viewing left historical bars)
     if (isDragging) {
       const deltaX = e.clientX - dragStartX;
-      const candlesMoved = Math.round(deltaX / 8);
+      const candlesMoved = Math.round(deltaX / (chartWidth / visibleCount));
       if (candlesMoved !== 0) {
-        setZoomIndex((prev) => Math.max(0, Math.min(data.length - visibleCount, prev + candlesMoved)));
+        setRightOffset((prev) => {
+          // Allow dragging up to -50 candles to the right (plenty of right blank buffer)
+          // and up to total - 15 candles to the left
+          const minOffset = -Math.min(50, Math.floor(visibleCount * 0.6));
+          const maxOffset = total - 10;
+          return Math.max(minOffset, Math.min(maxOffset, prev + candlesMoved));
+        });
         setDragStartX(e.clientX);
+      }
+    } else if (x >= padding.left && x <= padding.left + chartWidth) {
+      const relX = x - padding.left;
+      const step = chartWidth / Math.max(1, visibleCount);
+      const slotOffset = Math.floor(relX / step);
+      const computedIndex = (safeEndIndex - visibleCount) + slotOffset;
+      if (computedIndex >= 0 && computedIndex < total) {
+        setHoverIndex(computedIndex);
+      } else {
+        setHoverIndex(null);
       }
     }
   };
@@ -687,23 +712,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     e.preventDefault();
     if (e.deltaY < 0) {
       // Zoom in
-      setVisibleCount((prev) => Math.max(25, prev - 6));
+      setVisibleCount((prev) => Math.max(20, prev - 6));
     } else {
       // Zoom out
-      setVisibleCount((prev) => Math.min(Math.min(240, data.length), prev + 6));
+      setVisibleCount((prev) => Math.min(Math.min(240, total), prev + 6));
     }
   };
-
-  const periods: { id: KlinePeriod; label: string }[] = [
-    { id: 'day', label: '日线' },
-    { id: '1m', label: '1分' },
-    { id: '5m', label: '5分' },
-    { id: '15m', label: '15分' },
-    { id: '30m', label: '30分' },
-    { id: '60m', label: '60分' },
-    { id: '90m', label: '90分' },
-    { id: '120m', label: '120分' },
-  ];
 
   return (
     <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg overflow-hidden shadow-xl flex flex-col space-y-0">
@@ -803,7 +817,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
           <div className="flex items-center gap-1 text-slate-400">
             <button
-              onClick={() => setVisibleCount((c) => Math.max(25, c - 15))}
+              onClick={() => setVisibleCount((c) => Math.max(20, c - 15))}
               className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="放大图表"
             >
@@ -818,8 +832,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({
             </button>
             <button
               onClick={() => {
-                setZoomIndex(0);
-                setVisibleCount(80);
+                setRightOffset(-8);
+                setVisibleCount(70);
               }}
               className="p-1.5 hover:bg-[#16212e] rounded hover:text-slate-200 transition cursor-pointer"
               title="重置视图至最新K线"
@@ -865,7 +879,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       {/* Main Canvas Chart Area */}
       <div
         ref={containerRef}
-        className="relative w-full h-[500px] flex-1 bg-[#070a0e] cursor-crosshair select-none"
+        className="relative w-full h-[500px] flex-1 bg-[#070a0e] cursor-grab active:cursor-grabbing select-none"
       >
         <canvas
           ref={canvasRef}
