@@ -37,6 +37,13 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Automatically reset AI comprehensive analysis report when switching stock or timeframe
+  React.useEffect(() => {
+    setAiAnalysis(null);
+    setIsAiLoading(false);
+    setCopied(false);
+  }, [quote?.code, period]);
+
   if (!judgment) return null;
 
   const handleGenerateAI = async () => {
