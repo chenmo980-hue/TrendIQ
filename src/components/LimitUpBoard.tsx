@@ -92,6 +92,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
   const filteredStocks = useMemo(() => {
     return stocks.filter((s) => {
       // Board filter
+      if (selectedBoards === 99 && s.consecutiveBoards < 2) return false;
       if (selectedBoards === 4 && s.consecutiveBoards < 4) return false;
       if (selectedBoards > 0 && selectedBoards < 4 && s.consecutiveBoards !== selectedBoards)
         return false;
@@ -339,16 +340,17 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
             {activeTab === 'ladder' && (
               <div className="flex items-center bg-[#101622] p-0.5 rounded-md border border-[#1e293b] text-xs">
                 {[
-                  { label: '全部', val: 0 },
-                  { label: '4板及以上', val: 4 },
-                  { label: '3板', val: 3 },
-                  { label: '2板', val: 2 },
-                  { label: '首板', val: 1 },
+                  { label: `全部 (${stocks.length})`, val: 0 },
+                  { label: `🔥 连板股 (${stocks.filter((s) => s.consecutiveBoards >= 2).length})`, val: 99 },
+                  { label: `高标≥4板 (${stocks.filter((s) => s.consecutiveBoards >= 4).length})`, val: 4 },
+                  { label: `3板 (${stocks.filter((s) => s.consecutiveBoards === 3).length})`, val: 3 },
+                  { label: `2板 (${stocks.filter((s) => s.consecutiveBoards === 2).length})`, val: 2 },
+                  { label: `首板 (${stocks.filter((s) => s.consecutiveBoards === 1).length})`, val: 1 },
                 ].map((item) => (
                   <button
                     key={item.val}
                     onClick={() => setSelectedBoards(item.val)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition cursor-pointer whitespace-nowrap ${
                       selectedBoards === item.val
                         ? 'bg-[#1e293b] text-amber-300 font-semibold'
                         : 'text-slate-400 hover:text-slate-200'
