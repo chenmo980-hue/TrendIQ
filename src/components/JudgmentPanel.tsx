@@ -34,6 +34,13 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
     setErrorMsg(null);
 
     try {
+      const summaryList = Array.isArray(judgment.indicatorsSummary) ? judgment.indicatorsSummary : [];
+      const maItem = summaryList.find((i) => i.name.includes('MA'));
+      const macdItem = summaryList.find((i) => i.name.includes('MACD'));
+      const rsiItem = summaryList.find((i) => i.name.includes('RSI'));
+      const bollItem = summaryList.find((i) => i.name.includes('BOLL'));
+      const kdjItem = summaryList.find((i) => i.name.includes('KDJ'));
+
       const resp = await fetch('/api/analyze-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -43,11 +50,11 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
           judgment,
           marketContext: marketIndices,
           indicators: {
-            maSummary: judgment.indicatorsSummary.find((i) => i.name.includes('MA')),
-            macd: judgment.indicatorsSummary.find((i) => i.name.includes('MACD')),
-            rsi: judgment.indicatorsSummary.find((i) => i.name.includes('RSI')),
-            boll: judgment.indicatorsSummary.find((i) => i.name.includes('BOLL')),
-            kdj: judgment.indicatorsSummary.find((i) => i.name.includes('KDJ')),
+            maSummary: maItem,
+            macd: macdItem,
+            rsi: rsiItem,
+            boll: bollItem,
+            kdj: kdjItem,
           },
         }),
       });
@@ -60,12 +67,14 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
       setAiAnalysis(data);
     } catch (err: any) {
       console.error('AI analysis error:', err);
-      // Even if network completely dropped, fallback locally
+      // Fallback locally
+      const supStr = judgment.supportLevels?.length ? '¥' + judgment.supportLevels.join(' / ¥') : '近期低点';
+      const resStr = judgment.resistanceLevels?.length ? '¥' + judgment.resistanceLevels.join(' / ¥') : '前高阻力';
       setAiAnalysis({
-        trendAssessment: `${quote.name} (${quote.code}) 当前技术评分 ${judgment.score} 分，处于【${judgment.direction}】格局。均线与量能形成局部技术整理，建议以关键均线为攻防基准。`,
+        trendAssessment: `${quote.name} (${quote.code}) 当前技术评分 ${judgment.score} 分，处于【${judgment.direction}】格局。均线系统与量能形成局部技术整理，建议以关键均线为攻防基准。`,
         volumePriceAnalysis: `现价 ¥${quote.price} (今日涨跌 ${quote.changePercent > 0 ? '+' : ''}${quote.changePercent}%)，价格在 ¥${quote.low} - ¥${quote.high} 区间内博弈消化，未见极端量价背离。`,
         indicatorResonance: `指标共振情况：MACD 与 KDJ 处于局部修正状态，布林通道开口处于常态轨道。`,
-        keyLevels: `下方关键支撑参考 ${judgment.supportLevels.length ? '¥' + judgment.supportLevels.join(' / ¥') : '近期低点'}，上方阻力位参考 ${judgment.resistanceLevels.length ? '¥' + judgment.resistanceLevels.join(' / ¥') : '前高附近'}。`,
+        keyLevels: `下方关键支撑参考 ${supStr}，上方阻力位参考 ${resStr}。`,
         riskNotice: `免责声明：技术分析仅反映历史数据统计规律，受市场宏观流动性影响大，不构成投资建议。`,
         confidenceScore: 82,
         source: 'offline-engine',
@@ -92,22 +101,23 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
   };
 
   // Find indicator descriptions
-  const maItem = judgment.indicatorsSummary.find((i) => i.name.includes('MA'));
-  const macdItem = judgment.indicatorsSummary.find((i) => i.name.includes('MACD'));
-  const rsiItem = judgment.indicatorsSummary.find((i) => i.name.includes('RSI'));
-  const bollItem = judgment.indicatorsSummary.find((i) => i.name.includes('BOLL'));
-  const kdjItem = judgment.indicatorsSummary.find((i) => i.name.includes('KDJ'));
+  const summaryList = Array.isArray(judgment.indicatorsSummary) ? judgment.indicatorsSummary : [];
+  const maItem = summaryList.find((i) => i.name.includes('MA'));
+  const macdItem = summaryList.find((i) => i.name.includes('MACD'));
+  const rsiItem = summaryList.find((i) => i.name.includes('RSI'));
+  const bollItem = summaryList.find((i) => i.name.includes('BOLL'));
+  const kdjItem = summaryList.find((i) => i.name.includes('KDJ'));
 
-  const supportStr = judgment.supportLevels.length
+  const supportStr = judgment.supportLevels?.length
     ? judgment.supportLevels.join(' / ')
     : '近期低点支撑';
-  const resistanceStr = judgment.resistanceLevels.length
+  const resistanceStr = judgment.resistanceLevels?.length
     ? judgment.resistanceLevels.join(' / ')
     : '前期阻力位';
 
   // Format bias badge
-  const scoreDiff = (judgment.score - 50) / 10;
-  const badgeText = `${judgment.direction} · ${scoreDiff >= 0 ? '+' : ''}${scoreDiff.toFixed(1)}`;
+  const scoreDiff = ((judgment.score ?? 50) - 50) / 10;
+  const badgeText = `${judgment.direction || '中性'} · ${scoreDiff >= 0 ? '+' : ''}${scoreDiff.toFixed(1)}`;
 
   return (
     <div className="bg-[#0e1319] border border-[#1d2631] rounded-lg p-5 flex flex-col justify-between h-full space-y-4">
@@ -122,7 +132,7 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
 
         {/* Highlight Summary */}
         <p className="text-xs text-slate-300 leading-relaxed pt-1 pb-4">
-          {judgment.summary}
+          {judgment.summary || '技术面整体处于常态整理阶段，建议结合盘口动量与大盘环境综合研判。'}
         </p>
 
         {/* Structured Indicator Matrix */}
@@ -130,43 +140,43 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">趋势结构</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              {maItem?.desc || '均线系统处于局部震荡整理阶段'}
+              {maItem?.text || (maItem as any)?.desc || '均线系统多空博弈，短期处于收敛震荡'}
             </span>
           </div>
 
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">MACD动能</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              {macdItem?.desc || 'MACD 处于中性区间'}
+              {macdItem?.text || (macdItem as any)?.desc || 'MACD 处于中性常态区间'}
             </span>
           </div>
 
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">RSI强弱</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              {rsiItem?.desc || '处于中性震荡区间'}
+              {rsiItem?.text || (rsiItem as any)?.desc || 'RSI 处于中性震荡平衡区'}
             </span>
           </div>
 
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">布林带</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              {bollItem?.desc || '股价位于布林通道内运行'}
+              {bollItem?.text || (bollItem as any)?.desc || '股价位于布林通道内部平稳运行'}
             </span>
           </div>
 
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">KDJ</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              {kdjItem?.desc || 'KDJ 动能相对温和'}
+              {kdjItem?.text || (kdjItem as any)?.desc || 'KDJ 动能相对温和，无极端钝化'}
             </span>
           </div>
 
           <div className="flex items-start gap-4">
             <span className="text-slate-500 shrink-0 w-16">支撑压力</span>
             <span className="text-slate-200 flex-1 leading-relaxed">
-              下方关键支撑位参考 <span className="text-emerald-400 font-mono">{supportStr}</span>；
-              上方关键压力位参考 <span className="text-rose-400 font-mono">{resistanceStr}</span>
+              下方关键支撑参考 <span className="text-emerald-400 font-mono">{supportStr}</span>；
+              上方关键压力参考 <span className="text-rose-400 font-mono">{resistanceStr}</span>
             </span>
           </div>
         </div>

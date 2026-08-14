@@ -396,9 +396,9 @@ ${JSON.stringify(marketContext || [], null, 2)}
       console.warn('Gemini analyze-data fallback triggered (Network/Key restriction):', err?.message || err);
       
       // Professional quantitative fallback interpretation (Offline-first / Zero-failure)
-      const maSig = indicators?.maSummary?.desc || '均线系统多空博弈，短期均线处于震荡收敛阶段';
-      const macdSig = indicators?.macd?.desc || 'MACD 动能处于中性区间';
-      const kdjSig = indicators?.kdj?.desc || 'KDJ 波动速率相对温和';
+      const maSig = indicators?.maSummary?.text || indicators?.maSummary?.desc || '均线系统多空博弈，短期均线处于震荡收敛阶段';
+      const macdSig = indicators?.macd?.text || indicators?.macd?.desc || 'MACD 动能处于中性区间';
+      const kdjSig = indicators?.kdj?.text || indicators?.kdj?.desc || 'KDJ 波动速率相对温和';
       const supStr = judgment?.supportLevels?.length ? `¥${judgment.supportLevels.join(' / ¥')}` : '近期前低附近';
       const resStr = judgment?.resistanceLevels?.length ? `¥${judgment.resistanceLevels.join(' / ¥')}` : '前期密集套牢区';
 
