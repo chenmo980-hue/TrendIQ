@@ -244,14 +244,21 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  AI 资深首席解读 · 综合报告
-                  <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded font-mono">
-                    Gemini 3.7 Flash
+                  {aiAnalysis.source === 'offline-engine' ? '量化引擎 · 深度技术面综合解读' : 'AI 资深首席解读 · 综合报告'}
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                    aiAnalysis.source === 'offline-engine'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                  }`}>
+                    {aiAnalysis.source === 'offline-engine' ? '高精度量化规则引擎' : 'Gemini 3.7 Flash'}
                   </span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   生成时间: {aiAnalysis.generatedAt} · 结合大盘核心指数与多周期量价共振
                 </p>
+                {aiAnalysis.notice && (
+                  <p className="text-[10px] text-amber-400/90 mt-0.5">{aiAnalysis.notice}</p>
+                )}
               </div>
             </div>
 

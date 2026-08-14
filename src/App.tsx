@@ -208,25 +208,30 @@ export default function App() {
               </div>
             )}
 
-            {/* Candlestick Interactive Chart with MAs, BOLL, Support/Resistance & Sub-charts */}
-            <KlineChart
-              data={klineData}
-              period={currentPeriod}
-              onPeriodChange={handlePeriodChange}
-              stockName={quote?.name}
-              stockCode={quote?.code}
-            />
+            {/* Split Screen Layout for Modern Finance Terminal */}
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+              {/* Left Column: Interactive K-Line Chart & Indicator Wave (8 cols on XL) */}
+              <div className="xl:col-span-8 space-y-4">
+                <KlineChart
+                  data={klineData}
+                  period={currentPeriod}
+                  onPeriodChange={handlePeriodChange}
+                  stockName={quote?.name}
+                  stockCode={quote?.code}
+                />
+                <IndicatorPulse judgment={judgment} />
+              </div>
 
-            {/* Indicator Pulse Bar (5 Core Indicators) */}
-            <IndicatorPulse judgment={judgment} />
-
-            {/* Technical Judgment & AI Interpretation */}
-            <JudgmentPanel
-              judgment={judgment}
-              quote={quote}
-              period={currentPeriod}
-              marketIndices={marketIndices}
-            />
+              {/* Right Column: Quantitative Judgment & AI Interpretation (4 cols on XL) */}
+              <div className="xl:col-span-4 space-y-4">
+                <JudgmentPanel
+                  judgment={judgment}
+                  quote={quote}
+                  period={currentPeriod}
+                  marketIndices={marketIndices}
+                />
+              </div>
+            </div>
           </>
         ) : (
           /* Chart Vision AI Recognition Mode */
