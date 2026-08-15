@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { KlineChart } from './components/KlineChart';
 import { IndicatorPulse } from './components/IndicatorPulse';
 import { JudgmentPanel } from './components/JudgmentPanel';
+import { StockDragonTigerPanel } from './components/StockDragonTigerPanel';
 import { ImageAnalyzer } from './components/ImageAnalyzer';
 import { LimitUpBoard } from './components/LimitUpBoard';
 import {
@@ -364,6 +365,13 @@ export default function App() {
                     onPeriodChange={handlePeriodChange}
                     stockName={quote?.name}
                     stockCode={quote?.code}
+                  />
+
+                  {/* Dragon-Tiger Billboard Seat Breakdown Panel */}
+                  <StockDragonTigerPanel
+                    code={currentCode}
+                    stockName={quote?.name}
+                    quote={quote}
                   />
                 </div>
 

@@ -313,6 +313,58 @@ export interface DragonTigerSeat {
   }[];
 }
 
+export interface StockDragonTigerSeatItem {
+  rank: number;
+  seatName: string;
+  rawDeptName: string;
+  seatType: 'institution' | 'hot_money' | 'northbound' | 'retail';
+  hotMoneyTag: string;
+  hotMoneyDesc: string;
+  winRate30d: number;
+  buyAmount: number;
+  sellAmount: number;
+  netAmount: number;
+  ratio: number; // %
+}
+
+export interface StockDragonTigerDetail {
+  code: string;
+  name: string;
+  hasDragonTiger: boolean;
+  tradeDate?: string;
+  reason?: string;
+  closePrice?: number;
+  changeRate?: number;
+  accumAmount?: number;
+  totalBuy5: number;
+  totalSell5: number;
+  netBuyTotal: number;
+  institutionBuyTotal: number;
+  institutionSellTotal: number;
+  institutionNetTotal: number;
+  northboundNetTotal: number;
+  hotMoneyNetTotal: number;
+  retailNetTotal: number;
+  buySeats: StockDragonTigerSeatItem[];
+  sellSeats: StockDragonTigerSeatItem[];
+  verdictAnalysis?: {
+    dragonTigerSentiment: string;
+    hotMoneySummary: string;
+    institutionSummary: string;
+    tacticalAdvice: string;
+  };
+  notOnBoardReason?: string;
+  limitUpInference?: {
+    isLimitUp: boolean;
+    consecutiveBoards: number;
+    boardText: string;
+    sector: string;
+    sealAmount: number;
+    turnover: number;
+    reason: string;
+  };
+}
+
 export interface LimitUpLadderSummary {
   date?: string;
   tradeDate?: string;
