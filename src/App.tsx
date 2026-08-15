@@ -170,6 +170,8 @@ export default function App() {
 
   const handleSelectStock = (code: string) => {
     setCurrentCode(code);
+    setCurrentTab('indicator');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handlePeriodChange = (p: KlinePeriod) => {
