@@ -35,16 +35,23 @@ interface LimitUpBoardProps {
 type ActiveViewTab = 'ladder' | 'sectors' | 'dragonTiger';
 type LadderLayoutMode = 'vertical' | 'table' | 'dualSplit' | 'columns';
 
+// Global client memory cache to ensure instant smooth re-entry without blank flashes
+let _clientCachedSummary: LimitUpLadderSummary | null = null;
+let _clientCachedStocks: LimitUpStock[] = [];
+let _clientCachedSectors: SectorLimitUpGroup[] = [];
+let _clientCachedDragonTiger: DragonTigerSeat[] = [];
+let _clientCachedLastUpdated: string = '';
+
 export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => {
   const [activeTab, setActiveTab] = useState<ActiveViewTab>('ladder');
   const [ladderLayout, setLadderLayout] = useState<LadderLayoutMode>('vertical');
   const [firstBoardView, setFirstBoardView] = useState<'cards' | 'table'>('cards');
-  const [summary, setSummary] = useState<LimitUpLadderSummary | null>(null);
-  const [stocks, setStocks] = useState<LimitUpStock[]>([]);
-  const [sectors, setSectors] = useState<SectorLimitUpGroup[]>([]);
-  const [dragonTiger, setDragonTiger] = useState<DragonTigerSeat[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [summary, setSummary] = useState<LimitUpLadderSummary | null>(_clientCachedSummary);
+  const [stocks, setStocks] = useState<LimitUpStock[]>(_clientCachedStocks);
+  const [sectors, setSectors] = useState<SectorLimitUpGroup[]>(_clientCachedSectors);
+  const [dragonTiger, setDragonTiger] = useState<DragonTigerSeat[]>(_clientCachedDragonTiger);
+  const [isLoading, setIsLoading] = useState<boolean>(_clientCachedStocks.length === 0);
+  const [lastUpdated, setLastUpdated] = useState<string>(_clientCachedLastUpdated);
 
   // Filters
   const [selectedBoards, setSelectedBoards] = useState<number>(0); // 0 = all, 99 = >=2, 5 = 5, 4 = 4, 3 = 3, 2 = 2, 1 = 1
@@ -56,22 +63,33 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
   const [autoRefreshCountdown, setAutoRefreshCountdown] = useState<number>(30);
 
   const fetchLimitUpData = async (showLoading = true) => {
-    if (showLoading && stocks.length === 0) setIsLoading(true);
+    if (showLoading && _clientCachedStocks.length === 0) setIsLoading(true);
     try {
       const resp = await fetch('/api/limit-up-board');
       if (resp.ok) {
         const data = await resp.json();
-        setSummary(data.summary || null);
-        setStocks(data.stocks || []);
-        setSectors(data.sectors || []);
-        setDragonTiger(data.dragonTiger || []);
+        const nextSummary = data.summary || null;
+        const nextStocks = data.stocks || [];
+        const nextSectors = data.sectors || [];
+        const nextDragonTiger = data.dragonTiger || [];
+
+        _clientCachedSummary = nextSummary;
+        _clientCachedStocks = nextStocks;
+        _clientCachedSectors = nextSectors;
+        _clientCachedDragonTiger = nextDragonTiger;
+
+        setSummary(nextSummary);
+        setStocks(nextStocks);
+        setSectors(nextSectors);
+        setDragonTiger(nextDragonTiger);
+
         const now = new Date();
-        setLastUpdated(
-          `${now.getHours().toString().padStart(2, '0')}:${now
-            .getMinutes()
-            .toString()
-            .padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
-        );
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now
+          .getMinutes()
+          .toString()
+          .padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        _clientCachedLastUpdated = timeStr;
+        setLastUpdated(timeStr);
       }
     } catch (err) {
       console.error('Failed to fetch limit-up data:', err);
@@ -81,7 +99,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
   };
 
   useEffect(() => {
-    fetchLimitUpData(true);
+    fetchLimitUpData(stocks.length === 0);
   }, []);
 
   // 30s auto polling
