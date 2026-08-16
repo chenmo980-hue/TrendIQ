@@ -1129,22 +1129,22 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                       </div>
 
                       <div className="overflow-x-auto rounded-xl border border-[#1e293b]">
-                        <table className="w-full text-left text-xs border-collapse">
+                        <table className="w-full text-left text-xs border-collapse min-w-[1100px]">
                           <thead>
                             <tr className="bg-[#101724] text-slate-400 border-b border-[#1e293b]">
-                              <th className="py-3 px-3.5 font-semibold">梯队</th>
-                              <th className="py-3 px-3.5 font-semibold">股票代码/名称</th>
-                              <th className="py-3 px-3.5 font-semibold">最新价</th>
-                              <th className="py-3 px-3.5 font-semibold">涨跌幅</th>
-                              <th className="py-3 px-3.5 font-semibold text-amber-400">最后封板时间</th>
-                              <th className="py-3 px-3.5 font-semibold">首次封板</th>
-                              <th className="py-3 px-3.5 font-semibold">封单金额</th>
-                              <th className="py-3 px-3.5 font-semibold">今日成交</th>
-                              <th className="py-3 px-3.5 font-semibold">换手率</th>
-                              <th className="py-3 px-3.5 font-semibold">封板状态</th>
-                              <th className="py-3 px-3.5 font-semibold">所属板块 / 题材</th>
-                              <th className="py-3 px-3.5 font-semibold">涨停逻辑与驱动分析</th>
-                              <th className="py-3 px-3.5 font-semibold text-right">深度研判</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[90px] w-[90px]">梯队位阶</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[150px]">股票代码/名称</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[80px]">最新价</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[80px]">涨跌幅</th>
+                              <th className="py-3 px-3.5 font-semibold text-amber-400 whitespace-nowrap min-w-[130px]">最后封板时间</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[95px]">首次封板</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[105px]">封单金额</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[105px]">今日成交</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[75px]">换手率</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[110px]">封板状态</th>
+                              <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[140px]">所属板块 / 题材</th>
+                              <th className="py-3 px-3.5 font-semibold min-w-[280px]">涨停逻辑与驱动分析</th>
+                              <th className="py-3 px-3.5 font-semibold text-right whitespace-nowrap min-w-[75px]">深度研判</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-[#182232] bg-[#0a0f16]">
@@ -1154,79 +1154,79 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                 className="hover:bg-[#141d2c] transition group cursor-pointer"
                                 onClick={() => onSelectStock(stock.code)}
                               >
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 whitespace-nowrap">
                                   <span
-                                    className={`text-xs font-bold px-2 py-0.5 rounded ${getBoardBadgeColor(
+                                    className={`text-xs font-bold px-2.5 py-1 rounded whitespace-nowrap inline-flex items-center justify-center shadow-sm ${getBoardBadgeColor(
                                       stock.consecutiveBoards
                                     )}`}
                                   >
                                     {stock.boardText}
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 whitespace-nowrap">
                                   <div className="flex items-center gap-2">
-                                    <span className="font-bold text-white group-hover:text-amber-400 transition">
+                                    <span className="font-bold text-white group-hover:text-amber-400 transition text-sm">
                                       {stock.name}
                                     </span>
-                                    <span className="font-mono text-slate-400 text-[11px]">
+                                    <span className="font-mono text-slate-400 text-xs">
                                       {stock.code}
                                     </span>
                                   </div>
                                 </td>
-                                <td className="py-3 px-3.5 font-mono font-bold text-red-400">
+                                <td className="py-3 px-3.5 font-mono font-bold text-red-400 whitespace-nowrap text-sm">
                                   ¥{stock.price.toFixed(2)}
                                 </td>
-                                <td className="py-3 px-3.5 font-mono font-bold text-red-500">
+                                <td className="py-3 px-3.5 font-mono font-bold text-red-500 whitespace-nowrap text-sm">
                                   +{stock.changePercent.toFixed(2)}%
                                 </td>
-                                <td className="py-3 px-3.5 font-mono font-bold text-amber-300">
-                                  <div className="flex items-center gap-1.5 bg-[#0a1018] px-2 py-1 rounded border border-amber-500/20 w-fit">
+                                <td className="py-3 px-3.5 font-mono font-bold text-amber-300 whitespace-nowrap">
+                                  <div className="flex items-center gap-1.5 bg-[#0a1018] px-2.5 py-1 rounded border border-amber-500/30 w-fit">
                                     <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                     <span className="text-amber-300 font-bold">{stock.lastTime || stock.firstTime || '--:--:--'}</span>
                                   </div>
                                 </td>
-                                <td className="py-3 px-3.5 font-mono text-slate-400">
+                                <td className="py-3 px-3.5 font-mono text-slate-400 whitespace-nowrap">
                                   {stock.firstTime || '--:--:--'}
                                 </td>
-                                <td className="py-3 px-3.5 font-mono font-bold text-amber-300">
+                                <td className="py-3 px-3.5 font-mono font-bold text-amber-300 whitespace-nowrap">
                                   {formatMoney(stock.sealAmount)}
                                 </td>
-                                <td className="py-3 px-3.5 font-mono text-slate-200">
+                                <td className="py-3 px-3.5 font-mono text-slate-200 whitespace-nowrap">
                                   {formatMoney(stock.turnover)}
                                 </td>
-                                <td className="py-3 px-3.5 font-mono text-slate-300">
+                                <td className="py-3 px-3.5 font-mono text-slate-300 whitespace-nowrap">
                                   {stock.turnoverRate.toFixed(2)}%
                                 </td>
-                                <td className="py-3 px-3.5">
+                                <td className="py-3 px-3.5 whitespace-nowrap">
                                   {stock.openCount && stock.openCount > 0 ? (
-                                    <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                    <span className="px-2 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-600/40 text-[11px] font-semibold whitespace-nowrap">
                                       炸板{stock.openCount}次回封
                                     </span>
                                   ) : stock.firstTime === '09:25:00' ? (
-                                    <span className="px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                    <span className="px-2 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[11px] font-semibold whitespace-nowrap">
                                       一字秒封
                                     </span>
                                   ) : (
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                    <span className="px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[11px] font-semibold whitespace-nowrap">
                                       封死未开
                                     </span>
                                   )}
                                 </td>
-                                <td className="py-3 px-3.5">
-                                  <span className="px-2 py-0.5 rounded bg-[#182232] text-slate-300 text-[11px] whitespace-nowrap">
+                                <td className="py-3 px-3.5 whitespace-nowrap">
+                                  <span className="px-2.5 py-0.5 rounded bg-[#182232] text-slate-300 text-xs whitespace-nowrap inline-block">
                                     {stock.sector}
                                   </span>
                                 </td>
-                                <td className="py-3 px-3.5 max-w-sm text-slate-300 truncate">
+                                <td className="py-3 px-3.5 max-w-sm text-slate-300 text-xs">
                                   {stock.reason}
                                 </td>
-                                <td className="py-3 px-3.5 text-right">
+                                <td className="py-3 px-3.5 text-right whitespace-nowrap">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       onSelectStock(stock.code);
                                     }}
-                                    className="px-3 py-1 rounded bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black font-semibold text-xs transition cursor-pointer"
+                                    className="px-3 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-black font-bold text-xs transition cursor-pointer"
                                   >
                                     研判
                                   </button>
