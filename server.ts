@@ -9,6 +9,7 @@ import { parseStructuredVisionAnalysis } from './lib/parseStructuredAnalysis';
 import { getGeminiAI } from './lib/geminiClient';
 import { withJsonSafety } from './lib/withJsonSafety';
 import { getRealTimeLimitUpBoardData } from './lib/realtimeLimitUpService';
+import { fetchStockDragonTigerDetail } from './lib/stockDragonTigerService';
 import type { KlinePoint, StockQuote, StockSearchResult } from './src/types';
 
 /**
@@ -94,6 +95,16 @@ async function startServer() {
       dragonTiger: realData.dragonTiger,
       timestamp: realData.timestamp,
     });
+  }));
+
+  // Individual Stock Dragon-Tiger Billboard Seat Breakdown endpoint
+  app.get('/api/stock-dragon-tiger', withJsonSafety(async (req, res) => {
+    const code = String(req.query.code || '').trim();
+    if (!code) {
+      return res.status(400).json({ error: 'Stock code is required' });
+    }
+    const result = await fetchStockDragonTigerDetail(code);
+    res.json(result);
   }));
 
   // 2. Search stock endpoint
@@ -655,6 +666,10 @@ ${JSON.stringify(marketContext || [], null, 2)}
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`[TrendIQ] Server running on http://0.0.0.0:${PORT}`);
+    // Warm up limit-up and dragon tiger cache asynchronously
+    setTimeout(() => {
+      getRealTimeLimitUpBoardData().catch(() => {});
+    }, 1000);
   });
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "TrendIQ · A股技术分析终端",
-  "description": "A股行情与技术指标分析终端，支持K线多周期分析、MA/MACD/RSI/BOLL/KDJ计算、支撑压力与趋势线识别、AI技术解读与图表形态视觉识别",
+  "description": "A股行情与技术指标分析终端，支持K线多周期分析、MA/MACD/RSI/BOLL/KDJ计算、支撑压力与趋势线识别、AI技术解读、连板天梯与龙虎榜买卖席位深度透视",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
