@@ -787,7 +787,17 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
 
     const buffer = await resp.arrayBuffer();
     const text = new TextDecoder('gbk').decode(buffer);
-    const quoteMap = new Map<string, { price: number; changePercent: number; change: number; turnover: number; turnoverRate: number }>();
+    const quoteMap = new Map<
+      string,
+      {
+        price: number;
+        changePercent: number;
+        change: number;
+        turnover: number;
+        turnoverRate: number;
+        sealAmount?: number;
+      }
+    >();
 
     for (const line of text.split(';')) {
       const parts = line.trim().split('~');
@@ -800,6 +810,14 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
         const turnover = (parseFloat(parts[37]) || 0) * 10000;
         const turnoverRate = parseFloat(parts[38]) || 0;
 
+        // Buy 1 price & volume (lots)
+        const buy1Price = parseFloat(parts[9]) || 0;
+        const buy1Volume = parseFloat(parts[10]) || 0;
+        let sealAmount: number | undefined = undefined;
+        if (buy1Price > 0 && buy1Volume > 0 && Math.abs(buy1Price - price) < 0.02) {
+          sealAmount = buy1Volume * 100 * price;
+        }
+
         if (code && price > 0) {
           quoteMap.set(code, {
             price,
@@ -807,6 +825,7 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
             change,
             turnover,
             turnoverRate,
+            sealAmount,
           });
         }
       }
@@ -824,6 +843,7 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
         changePercent: live.changePercent || s.changePercent,
         turnover: live.turnover > 0 ? live.turnover : s.turnover,
         turnoverRate: live.turnoverRate > 0 ? live.turnoverRate : s.turnoverRate,
+        sealAmount: (live.sealAmount && live.sealAmount > 0) ? live.sealAmount : s.sealAmount,
       };
     });
   } catch (err) {
