@@ -1038,7 +1038,10 @@ async function fetchDynamicMarketLimitUpPool(): Promise<LimitUpStock[] | null> {
 
 /**
  * Main API function returning authentic, dynamic Limit-Up and Dragon Tiger Data
- * Scans real-time live market with fallback to curated snapshot.
+ * Always uses curated master stocks as the structural backbone (consecutive boards,
+ * sector attribution, dragon tiger metadata) and enriches with live quotes.
+ * Dynamic market scan only supplements with newly discovered limit-up stocks
+ * not present in the master list.
  */
 export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
   const now = Date.now();
@@ -1048,6 +1051,15 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
     return cachedBoardData;
   }
 
+  // 1. Start with master stocks as the structural backbone (never lose consecutiveBoards, sector, dragonTiger meta)
+  let masterEnriched = MASTER_LIMIT_UP_STOCKS.map((s) => ({ ...s }));
+  try {
+    masterEnriched = await enrichStocksWithLiveQuotes(masterEnriched);
+  } catch {
+    // ignore quote enrichment failure, keep master data intact
+  }
+
+  // 2. Optionally supplement with dynamic market scan for newly discovered limit-up stocks
   let liveStocks: LimitUpStock[] | null = null;
   try {
     liveStocks = await fetchDynamicMarketLimitUpPool();
@@ -1055,38 +1067,79 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
     // ignore
   }
 
-  let finalStocks: LimitUpStock[] = [];
-  if (liveStocks && liveStocks.length >= 10) {
-    finalStocks = liveStocks;
-  } else {
-    // Fallback: Enrich curated master stocks with live quotes
-    let masterEnriched = MASTER_LIMIT_UP_STOCKS.map((s) => ({ ...s }));
-    try {
-      masterEnriched = await enrichStocksWithLiveQuotes(masterEnriched);
-    } catch {
-      // ignore
+  let finalStocks = [...masterEnriched];
+  if (liveStocks && liveStocks.length > 0) {
+    const masterCodes = new Set(masterEnriched.map((s) => s.code));
+    // Only add dynamic stocks that are NOT already in master list
+    const supplementalStocks = liveStocks.filter((s) => !masterCodes.has(s.code));
+    if (supplementalStocks.length > 0) {
+      finalStocks = [...masterEnriched, ...supplementalStocks];
     }
-    finalStocks = masterEnriched;
   }
 
-  // Generate dynamic or updated sector groups
+  // Sort by consecutive boards descending, then seal amount descending
+  finalStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
+
+  // Build sector groups: use MASTER_SECTOR_GROUPS as backbone, enrich with live stock data
   const stockCodeMap = new Map<string, LimitUpStock>();
   for (const s of finalStocks) {
     stockCodeMap.set(s.code, s);
   }
 
-  // Dynamically group sectors
-  const sectorGroupMap = new Map<string, LimitUpStock[]>();
-  for (const s of finalStocks) {
-    const secName = s.sector.split('/')[0].trim();
-    if (!sectorGroupMap.has(secName)) {
-      sectorGroupMap.set(secName, []);
+  const updatedSectors: SectorLimitUpGroup[] = [];
+
+  // 1. Update master sector groups with live stock data
+  for (const masterSec of MASTER_SECTOR_GROUPS) {
+    // Get latest stock data for each stock in this sector group
+    const liveSecStocks: LimitUpStock[] = [];
+    for (const masterStock of masterSec.stocks) {
+      const live = stockCodeMap.get(masterStock.code);
+      if (live) {
+        liveSecStocks.push(live);
+      } else {
+        // Fallback to master stock if no live data
+        liveSecStocks.push(masterStock);
+      }
     }
-    sectorGroupMap.get(secName)!.push(s);
+
+    if (liveSecStocks.length === 0) continue;
+
+    liveSecStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
+    const leader = liveSecStocks[0];
+    const avgChange = +(liveSecStocks.reduce((sum, s) => sum + s.changePercent, 0) / liveSecStocks.length).toFixed(2);
+
+    updatedSectors.push({
+      ...masterSec,
+      sectorChangePercent: avgChange,
+      limitUpCount: liveSecStocks.length,
+      leaderStock: {
+        code: leader.code,
+        name: leader.name,
+        changePercent: leader.changePercent,
+        consecutiveBoards: leader.consecutiveBoards,
+        boardText: leader.boardText,
+      },
+      catalyst: leader.reason,
+      stocks: liveSecStocks,
+    });
+
+    // Mark these codes as handled
+    for (const s of liveSecStocks) {
+      stockCodeMap.delete(s.code);
+    }
   }
 
-  const updatedSectors: SectorLimitUpGroup[] = [];
-  for (const [secName, secStocks] of sectorGroupMap.entries()) {
+  // 2. Group remaining stocks (supplemental from dynamic scan) by sector
+  const supplementalGroupMap = new Map<string, LimitUpStock[]>();
+  for (const [, stock] of stockCodeMap) {
+    const secName = stock.sector.split('/')[0].trim();
+    if (!supplementalGroupMap.has(secName)) {
+      supplementalGroupMap.set(secName, []);
+    }
+    supplementalGroupMap.get(secName)!.push(stock);
+  }
+
+  for (const [secName, secStocks] of supplementalGroupMap.entries()) {
     secStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
     const leader = secStocks[0];
     const avgChange = +(secStocks.reduce((sum, s) => sum + s.changePercent, 0) / secStocks.length).toFixed(2);
