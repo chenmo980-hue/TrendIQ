@@ -26,6 +26,8 @@ import {
   TrendingDown,
   Info,
   FileText,
+  Clock,
+  Timer,
 } from 'lucide-react';
 
 interface LimitUpBoardProps {
@@ -584,7 +586,7 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                           if (!topDragon) return null;
                           return (
                             <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 shrink-0">
-                              <div className="grid grid-cols-3 gap-3 bg-[#080d14]/80 p-3 rounded-xl border border-red-500/20 text-center">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#080d14]/80 p-3 rounded-xl border border-red-500/20 text-center">
                                 <div>
                                   <div className="text-[10px] text-slate-400">现价/涨幅</div>
                                   <div className="text-sm font-bold font-mono text-red-400">
@@ -594,7 +596,19 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                     +{topDragon.changePercent.toFixed(2)}%
                                   </div>
                                 </div>
-                                <div className="border-x border-slate-800 px-2">
+                                <div className="border-l sm:border-x border-slate-800 px-2">
+                                  <div className="text-[10px] text-slate-400 flex items-center justify-center gap-1">
+                                    <Clock className="w-3 h-3 text-amber-400" />
+                                    <span>最后封板</span>
+                                  </div>
+                                  <div className="text-sm font-bold font-mono text-amber-300">
+                                    {topDragon.lastTime || topDragon.firstTime || '09:25:00'}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 font-mono">
+                                    首封 {topDragon.firstTime || '09:25:00'}
+                                  </div>
+                                </div>
+                                <div className="border-r sm:border-r border-slate-800 px-2">
                                   <div className="text-[10px] text-slate-400">封单资金</div>
                                   <div className="text-sm font-bold font-mono text-amber-400">
                                     {formatMoney(topDragon.sealAmount)}
@@ -606,7 +620,9 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                   <div className="text-sm font-bold font-mono text-slate-200">
                                     {formatMoney(topDragon.turnover)}
                                   </div>
-                                  <div className="text-[10px] text-emerald-400">主力合力</div>
+                                  <div className="text-[10px] text-emerald-400">
+                                    {topDragon.openCount && topDragon.openCount > 0 ? `炸板${topDragon.openCount}次回封` : '封死未开'}
+                                  </div>
                                 </div>
                               </div>
 
@@ -865,9 +881,12 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                       <th className="py-2.5 px-3 font-semibold">股票代码/名称</th>
                                       <th className="py-2.5 px-3 font-semibold">最新价</th>
                                       <th className="py-2.5 px-3 font-semibold">涨跌幅</th>
+                                      <th className="py-2.5 px-3 font-semibold text-amber-400">最后封板时间</th>
+                                      <th className="py-2.5 px-3 font-semibold">首次封板</th>
                                       <th className="py-2.5 px-3 font-semibold">封单金额</th>
                                       <th className="py-2.5 px-3 font-semibold">今日成交</th>
                                       <th className="py-2.5 px-3 font-semibold">换手率</th>
+                                      <th className="py-2.5 px-3 font-semibold">封板状态</th>
                                       <th className="py-2.5 px-3 font-semibold">所属板块 / 题材</th>
                                       <th className="py-2.5 px-3 font-semibold">首板涨停驱动逻辑</th>
                                       <th className="py-2.5 px-3 font-semibold text-right">研判</th>
@@ -897,6 +916,15 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                           +{stock.changePercent.toFixed(2)}%
                                         </td>
                                         <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
+                                          <div className="flex items-center gap-1">
+                                            <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                            <span>{stock.lastTime || stock.firstTime || '--:--:--'}</span>
+                                          </div>
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono text-slate-400">
+                                          {stock.firstTime || '--:--:--'}
+                                        </td>
+                                        <td className="py-2.5 px-3 font-mono font-bold text-amber-300">
                                           {formatMoney(stock.sealAmount)}
                                         </td>
                                         <td className="py-2.5 px-3 font-mono text-slate-200">
@@ -904,6 +932,21 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                         </td>
                                         <td className="py-2.5 px-3 font-mono text-slate-300">
                                           {stock.turnoverRate.toFixed(2)}%
+                                        </td>
+                                        <td className="py-2.5 px-3">
+                                          {stock.openCount && stock.openCount > 0 ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-600/40 text-[10px] font-semibold">
+                                              炸板{stock.openCount}次
+                                            </span>
+                                          ) : stock.firstTime === '09:25:00' ? (
+                                            <span className="px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[10px] font-semibold">
+                                              一字封死
+                                            </span>
+                                          ) : (
+                                            <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[10px] font-semibold">
+                                              封死
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="py-2.5 px-3">
                                           <span className="px-2 py-0.5 rounded bg-[#182232] text-slate-300 text-[11px]">
@@ -988,6 +1031,35 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                       </div>
                                     </div>
 
+                                    {/* 封板时间与封板状态条 (Seal Timing & Status) */}
+                                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#060a0f] rounded-lg border border-[#16202e] text-xs">
+                                      <div className="flex items-center gap-1.5">
+                                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <span className="text-slate-400 text-[11px]">最后封板:</span>
+                                        <span className="font-mono font-bold text-amber-300">
+                                          {stock.lastTime || stock.firstTime || '--:--:--'}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 text-[11px]">
+                                        <span className="text-slate-500 font-mono">
+                                          首封 {stock.firstTime || '--:--:--'}
+                                        </span>
+                                        {stock.openCount && stock.openCount > 0 ? (
+                                          <span className="px-1.5 py-0.2 rounded bg-amber-950/90 text-amber-400 border border-amber-600/40 text-[10px] font-semibold">
+                                            炸板{stock.openCount}次
+                                          </span>
+                                        ) : stock.firstTime === '09:25:00' ? (
+                                          <span className="px-1.5 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[10px] font-semibold">
+                                            一字秒封
+                                          </span>
+                                        ) : (
+                                          <span className="px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[10px] font-semibold">
+                                            封死
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
                                     {/* Metrics Grid */}
                                     <div className="grid grid-cols-3 gap-2 py-2 px-3 bg-[#060a0f] rounded-lg border border-[#151e2b] text-xs">
                                       <div>
@@ -1064,9 +1136,12 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                               <th className="py-3 px-3.5 font-semibold">股票代码/名称</th>
                               <th className="py-3 px-3.5 font-semibold">最新价</th>
                               <th className="py-3 px-3.5 font-semibold">涨跌幅</th>
+                              <th className="py-3 px-3.5 font-semibold text-amber-400">最后封板时间</th>
+                              <th className="py-3 px-3.5 font-semibold">首次封板</th>
                               <th className="py-3 px-3.5 font-semibold">封单金额</th>
                               <th className="py-3 px-3.5 font-semibold">今日成交</th>
                               <th className="py-3 px-3.5 font-semibold">换手率</th>
+                              <th className="py-3 px-3.5 font-semibold">封板状态</th>
                               <th className="py-3 px-3.5 font-semibold">所属板块 / 题材</th>
                               <th className="py-3 px-3.5 font-semibold">涨停逻辑与驱动分析</th>
                               <th className="py-3 px-3.5 font-semibold text-right">深度研判</th>
@@ -1105,6 +1180,15 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                   +{stock.changePercent.toFixed(2)}%
                                 </td>
                                 <td className="py-3 px-3.5 font-mono font-bold text-amber-300">
+                                  <div className="flex items-center gap-1.5 bg-[#0a1018] px-2 py-1 rounded border border-amber-500/20 w-fit">
+                                    <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                    <span className="text-amber-300 font-bold">{stock.lastTime || stock.firstTime || '--:--:--'}</span>
+                                  </div>
+                                </td>
+                                <td className="py-3 px-3.5 font-mono text-slate-400">
+                                  {stock.firstTime || '--:--:--'}
+                                </td>
+                                <td className="py-3 px-3.5 font-mono font-bold text-amber-300">
                                   {formatMoney(stock.sealAmount)}
                                 </td>
                                 <td className="py-3 px-3.5 font-mono text-slate-200">
@@ -1114,7 +1198,22 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                   {stock.turnoverRate.toFixed(2)}%
                                 </td>
                                 <td className="py-3 px-3.5">
-                                  <span className="px-2 py-0.5 rounded bg-[#182232] text-slate-300 text-[11px]">
+                                  {stock.openCount && stock.openCount > 0 ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-400 border border-amber-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                      炸板{stock.openCount}次回封
+                                    </span>
+                                  ) : stock.firstTime === '09:25:00' ? (
+                                    <span className="px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                      一字秒封
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[10px] font-semibold whitespace-nowrap">
+                                      封死未开
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3.5">
+                                  <span className="px-2 py-0.5 rounded bg-[#182232] text-slate-300 text-[11px] whitespace-nowrap">
                                     {stock.sector}
                                   </span>
                                 </td>
@@ -1200,6 +1299,35 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                       <div className="text-xs font-bold font-mono text-red-500">
                                         +{stock.changePercent.toFixed(2)}%
                                       </div>
+                                    </div>
+                                  </div>
+
+                                  {/* 封板时间与封板状态条 (Seal Timing & Status) */}
+                                  <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#060a0f] rounded-lg border border-[#16202e] text-xs">
+                                    <div className="flex items-center gap-1.5">
+                                      <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                      <span className="text-slate-400 text-[11px]">最后封板:</span>
+                                      <span className="font-mono font-bold text-amber-300">
+                                        {stock.lastTime || stock.firstTime || '--:--:--'}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[11px]">
+                                      <span className="text-slate-500 font-mono">
+                                        首封 {stock.firstTime || '--:--:--'}
+                                      </span>
+                                      {stock.openCount && stock.openCount > 0 ? (
+                                        <span className="px-1.5 py-0.2 rounded bg-amber-950/90 text-amber-400 border border-amber-600/40 text-[10px] font-semibold">
+                                          炸板{stock.openCount}次
+                                        </span>
+                                      ) : stock.firstTime === '09:25:00' ? (
+                                        <span className="px-1.5 py-0.2 rounded bg-red-950/80 text-red-300 border border-red-600/40 text-[10px] font-semibold">
+                                          一字秒封
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 text-[10px] font-semibold">
+                                          封死
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
 
@@ -1298,6 +1426,20 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                   </div>
                                 </div>
 
+                                {/* 封板时间条 */}
+                                <div className="flex items-center justify-between px-2 py-1 bg-[#060a0f] rounded border border-[#141b25] text-[10px]">
+                                  <div className="flex items-center gap-1 text-slate-400">
+                                    <Clock className="w-3 h-3 text-amber-400" />
+                                    <span>末封:</span>
+                                    <span className="font-mono font-bold text-amber-300">
+                                      {stock.lastTime || stock.firstTime || '--:--:--'}
+                                    </span>
+                                  </div>
+                                  <span className="font-mono text-slate-500">
+                                    首封 {stock.firstTime || '--:--:--'}
+                                  </span>
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-2 py-1.5 px-2 bg-[#060a0f] rounded border border-[#141b25] text-[11px]">
                                   <div>
                                     <span className="text-[10px] text-slate-500 block">封单</span>
@@ -1332,6 +1474,155 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                               </div>
                             ))}
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= LAYOUT 4: 横向多列连板看板 (Columns Kanban View) ================= */}
+                  {ladderLayout === 'columns' && (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between bg-[#0c1118] p-4 rounded-xl border border-[#18202c]">
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-amber-400" />
+                          <h3 className="text-base font-bold text-white">
+                            横向梯队多列看板 (按连板高度分栏排布)
+                          </h3>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          向右滑动查看更多梯队 · 支持点击卡片进入深度K线研判
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 overflow-x-auto pb-4">
+                        {[
+                          { title: '空间总龙 (≥4板)', min: 4, max: 99, color: 'from-red-950/80 to-[#120d14]', border: 'border-red-500/60', badge: 'bg-red-600' },
+                          { title: '中位加速 (3板)', min: 3, max: 3, color: 'from-orange-950/70 to-[#121012]', border: 'border-orange-500/50', badge: 'bg-orange-600' },
+                          { title: '接力确认 (2板)', min: 2, max: 2, color: 'from-amber-950/60 to-[#121214]', border: 'border-amber-500/40', badge: 'bg-amber-600' },
+                          { title: '首板精选 (1板)', min: 1, max: 1, color: 'from-blue-950/50 to-[#0e141f]', border: 'border-blue-500/30', badge: 'bg-blue-600' },
+                        ].map((col) => {
+                          const colStocks = filteredStocks
+                            .filter((s) => s.consecutiveBoards >= col.min && s.consecutiveBoards <= col.max)
+                            .sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
+
+                          return (
+                            <div
+                              key={col.title}
+                              className={`bg-gradient-to-b ${col.color} border ${col.border} rounded-xl p-3.5 space-y-3 flex flex-col min-h-[500px]`}
+                            >
+                              {/* Column Header */}
+                              <div className="flex items-center justify-between border-b border-[#1f293d] pb-2.5">
+                                <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                                  <span>{col.title}</span>
+                                </span>
+                                <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded text-white ${col.badge}`}>
+                                  {colStocks.length} 家
+                                </span>
+                              </div>
+
+                              {/* Column Cards */}
+                              <div className="space-y-3 overflow-y-auto max-h-[650px] pr-1 custom-scrollbar flex-1">
+                                {colStocks.length === 0 ? (
+                                  <div className="p-8 text-center text-slate-500 text-xs">
+                                    暂无符合条件的股票
+                                  </div>
+                                ) : (
+                                  colStocks.map((stock) => (
+                                    <div
+                                      key={stock.code}
+                                      className="bg-[#0b1017] border border-[#192433] hover:border-amber-400 rounded-lg p-3 space-y-2.5 transition group cursor-pointer"
+                                      onClick={() => onSelectStock(stock.code)}
+                                    >
+                                      {/* Header */}
+                                      <div className="flex items-start justify-between">
+                                        <div>
+                                          <div className="flex items-center gap-1.5">
+                                            <h5 className="text-sm font-black text-white group-hover:text-amber-400 transition">
+                                              {stock.name}
+                                            </h5>
+                                            <span className="text-[11px] font-mono text-slate-400">
+                                              {stock.code}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center gap-1 mt-1">
+                                            <span
+                                              className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${getBoardBadgeColor(
+                                                stock.consecutiveBoards
+                                              )}`}
+                                            >
+                                              {stock.boardText}
+                                            </span>
+                                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#16202c] text-slate-300 truncate max-w-[100px]">
+                                              {stock.sector}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="text-right">
+                                          <div className="text-sm font-black font-mono text-red-400">
+                                            ¥{stock.price.toFixed(2)}
+                                          </div>
+                                          <div className="text-[10px] font-bold font-mono text-red-500">
+                                            +{stock.changePercent.toFixed(2)}%
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* 最后封板时间突出呈现 */}
+                                      <div className="flex items-center justify-between px-2 py-1 bg-[#060a0f] rounded border border-[#16202e] text-[11px]">
+                                        <div className="flex items-center gap-1">
+                                          <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                          <span className="text-slate-400 text-[10px]">最后封板:</span>
+                                          <span className="font-mono font-bold text-amber-300">
+                                            {stock.lastTime || stock.firstTime || '--:--:--'}
+                                          </span>
+                                        </div>
+                                        <span className="font-mono text-slate-500 text-[10px]">
+                                          首封 {stock.firstTime || '--:--:--'}
+                                        </span>
+                                      </div>
+
+                                      {/* Metrics Grid */}
+                                      <div className="grid grid-cols-2 gap-1.5 py-1 px-2 bg-[#060a0f] rounded border border-[#141b25] text-[11px]">
+                                        <div>
+                                          <span className="text-[10px] text-slate-500 block">封单金额</span>
+                                          <span className="font-mono font-bold text-amber-300 text-xs">
+                                            {formatMoney(stock.sealAmount)}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] text-slate-500 block">换手率</span>
+                                          <span className="font-mono text-slate-200 text-xs font-semibold">
+                                            {stock.turnoverRate.toFixed(1)}%
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <p className="text-[11px] text-slate-300 line-clamp-2">
+                                        {stock.reason}
+                                      </p>
+
+                                      <div className="flex items-center justify-between pt-1.5 border-t border-[#182230]">
+                                        <span className="text-[10px] text-slate-400 font-mono truncate max-w-[100px]">
+                                          {stock.dragonTigerType || '游资合力'}
+                                        </span>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            onSelectStock(stock.code);
+                                          }}
+                                          className="text-[11px] text-amber-400 hover:text-amber-300 font-semibold cursor-pointer flex items-center gap-0.5"
+                                        >
+                                          <span>研判</span>
+                                          <ChevronRight className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -1447,8 +1738,11 @@ export const LimitUpBoard: React.FC<LimitUpBoardProps> = ({ onSelectStock }) => 
                                     >
                                       {stk.boardText}
                                     </span>
+                                    <span className="text-[9px] text-amber-300/80 font-mono">
+                                      末封 {stk.lastTime || stk.firstTime || '--'}
+                                    </span>
                                     <span className="text-[9px] text-slate-500 font-mono">
-                                      封单 {formatMoney(stk.sealAmount)}
+                                      · 封单 {formatMoney(stk.sealAmount)}
                                     </span>
                                   </div>
                                 </div>
