@@ -24,19 +24,11 @@ interface FrequentStock {
   lastViewed: number;
 }
 
-const DEFAULT_FREQUENT_STOCKS: FrequentStock[] = [
-  { name: '贵州茅台', code: '600519', count: 10, lastViewed: Date.now() - 1000 },
-  { name: '万丰奥威', code: '002085', count: 9, lastViewed: Date.now() - 1500 },
-  { name: '中科曙光', code: '603019', count: 8, lastViewed: Date.now() - 2000 },
-  { name: '宁德时代', code: '300750', count: 8, lastViewed: Date.now() - 2500 },
-  { name: '东方财富', code: '300059', count: 6, lastViewed: Date.now() - 3000 },
-  { name: '中芯国际', code: '688981', count: 4, lastViewed: Date.now() - 4000 },
-  { name: '比亚迪',   code: '002594', count: 2, lastViewed: Date.now() - 5000 },
-];
+const DEFAULT_FREQUENT_STOCKS: FrequentStock[] = [];
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'indicator' | 'image' | 'limitUp'>('indicator');
-  const [currentCode, setCurrentCode] = useState<string>('600519'); // Default to 贵州茅台
+  const [currentCode, setCurrentCode] = useState<string>(''); // 不默认加载任何标的
   const [currentPeriod, setCurrentPeriod] = useState<KlinePeriod>('day');
 
   const [quote, setQuote] = useState<StockQuote | null>(null);
@@ -61,7 +53,7 @@ export default function App() {
     } catch {
       // fallback
     }
-    return DEFAULT_FREQUENT_STOCKS;
+    return []; // 默认不显示任何常看标的
   });
 
   // Track stock visit count and timestamp dynamically
@@ -277,9 +269,9 @@ export default function App() {
                     <button
                       onClick={() => {
                         localStorage.removeItem('trendiq_frequent_stocks');
-                        setFrequentStocks(DEFAULT_FREQUENT_STOCKS);
+                        setFrequentStocks([]);
                       }}
-                      title="重置常看记录"
+                      title="清空常看记录"
                       className="p-1 hover:bg-[#151e2a] text-slate-500 hover:text-slate-300 rounded transition cursor-pointer ml-1"
                     >
                       <RotateCcw className="w-3 h-3" />

@@ -3,7 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { normalizeStockCode } from './lib/stockCode';
 import { fetchMarketContext } from './lib/marketContext';
-import { PRESET_DATABASE, generateMockKline, STOCK_PRICE_MAP, formatBeijingDateStr, getBeijingDate } from './lib/sampleData';
+import { PRESET_DATABASE, generateMockKline, STOCK_PRICE_MAP, formatBeijingDateStr, getBeijingDate, isTradingDay } from './lib/sampleData';
 import { aggregateMinuteKline } from './lib/aggregateMinuteKline';
 import { parseStructuredVisionAnalysis } from './lib/parseStructuredAnalysis';
 import { getGeminiAI } from './lib/geminiClient';
@@ -416,10 +416,13 @@ async function startServer() {
       };
     }
 
+    const today = getBeijingDate();
+    const todayStr = formatBeijingDateStr(today);
+    const isTodayTradingDay = isTradingDay(today);
+
     if (!klineData || klineData.length < 10) {
       klineData = generateMockKline(quote.price, period === 'day' ? 360 : 180, period);
-    } else if (period === 'day' && quote) {
-      const todayStr = formatBeijingDateStr(getBeijingDate());
+    } else if (period === 'day' && quote && isTodayTradingDay) {
       const lastItem = klineData[klineData.length - 1];
       if (lastItem && lastItem.time < todayStr) {
         klineData.push({
@@ -446,6 +449,7 @@ async function startServer() {
       period,
       symbol: norm.symbol,
       timestamp: Date.now(),
+      isTradingDay: isTodayTradingDay,
     });
   }));
 

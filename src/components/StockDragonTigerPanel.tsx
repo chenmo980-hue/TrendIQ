@@ -64,6 +64,11 @@ export const StockDragonTigerPanel: React.FC<StockDragonTigerPanelProps> = ({
     fetchDragonTiger(code);
   }, [code]);
 
+  // 无龙虎榜数据且非加载中：直接不渲染，避免冗余占位
+  if (!loading && data && !data.hasDragonTiger) {
+    return null;
+  }
+
   const formatAmount = (val: number | undefined) => {
     if (val === undefined || val === null || isNaN(val)) return '¥0.00';
     const abs = Math.abs(val);
@@ -547,68 +552,7 @@ export const StockDragonTigerPanel: React.FC<StockDragonTigerPanelProps> = ({
             </div>
           )}
         </div>
-      ) : (
-        /* Zero-Failure Fallback: Stock is NOT on Dragon Tiger Board Today */
-        <div className="p-6 space-y-4">
-          <div className="flex items-start gap-3 bg-[#111721] p-4 rounded-lg border border-[#1e2938]">
-            <Info className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
-            <div className="space-y-1.5">
-              <h4 className="text-xs font-bold text-slate-200">
-                当前标的【{stockName || data?.name || code}】当日未达交易所龙虎榜异动披露标准
-              </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {data?.notOnBoardReason ||
-                  '沪深北交易所龙虎榜披露规则：仅披露日涨跌幅偏离值达±7%、日振幅达15%、日换手率达20%或连续3个交易日偏离值累计达20%等异动条件的标的。'}
-              </p>
-            </div>
-          </div>
-
-          {/* If Limit Up Stock, show live limit-up capital inference */}
-          {data?.limitUpInference?.isLimitUp && (
-            <div className="bg-[#121924] border border-amber-600/30 rounded-lg p-4 space-y-3">
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
-                <Flame className="w-4 h-4 text-red-400" />
-                <span>连板涨停盘口量化分析与主力封单推演</span>
-                <span className="px-2 py-0.5 rounded bg-red-900/40 border border-red-600/40 text-red-300 text-[11px]">
-                  {data.limitUpInference.boardText}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="bg-[#161f2c] p-2.5 rounded border border-[#222e3e]">
-                  <span className="text-slate-400 block text-[11px]">所属主线板块</span>
-                  <span className="text-white font-bold">{data.limitUpInference.sector}</span>
-                </div>
-                <div className="bg-[#161f2c] p-2.5 rounded border border-[#222e3e]">
-                  <span className="text-slate-400 block text-[11px]">封单金额</span>
-                  <span className="text-rose-400 font-bold font-mono">
-                    {formatPureAmount(data.limitUpInference.sealAmount)}
-                  </span>
-                </div>
-                <div className="bg-[#161f2c] p-2.5 rounded border border-[#222e3e]">
-                  <span className="text-slate-400 block text-[11px]">日成交额</span>
-                  <span className="text-white font-bold font-mono">
-                    {formatPureAmount(data.limitUpInference.turnover)}
-                  </span>
-                </div>
-                <div className="bg-[#161f2c] p-2.5 rounded border border-[#222e3e]">
-                  <span className="text-slate-400 block text-[11px]">连板梯队</span>
-                  <span className="text-amber-300 font-bold font-mono">
-                    第 {data.limitUpInference.consecutiveBoards} 阶梯
-                  </span>
-                </div>
-              </div>
-
-              {data.limitUpInference.reason && (
-                <p className="text-xs text-slate-300 bg-[#161f2c] p-2.5 rounded border border-[#222e3e]">
-                  <strong className="text-amber-300">涨停题材驱动: </strong>
-                  {data.limitUpInference.reason}
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+      ) : null}
     </div>
   );
 };
