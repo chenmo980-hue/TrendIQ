@@ -1,7 +1,9 @@
+export type AssetType = 'stock' | 'sector' | 'futures';
+
 export interface StockQuote {
   code: string;
   name: string;
-  fullCode: string; // e.g. sh600519 or sz000001
+  fullCode: string; // e.g. sh600519 or sz000001 or RB0 or BK_DKJJ
   price: number;
   change: number;
   changePercent: number;
@@ -9,14 +11,18 @@ export interface StockQuote {
   high: number;
   low: number;
   prevClose: number;
-  volume: number; // in shares / hands
-  turnover: number; // in RMB
+  volume: number; // in shares / hands / contracts
+  turnover: number; // in RMB / USD
   amplitude?: number; // 振幅 %
   pe?: number;
   pb?: number;
   marketCap?: number; // 总市值
   timestamp: number | string;
   isIndex?: boolean;
+  assetType?: AssetType;
+  unit?: string;
+  exchange?: string;
+  category?: string;
 }
 
 export interface KlinePoint {

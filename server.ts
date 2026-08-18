@@ -10,6 +10,10 @@ import { getGeminiAI } from './lib/geminiClient';
 import { withJsonSafety } from './lib/withJsonSafety';
 import { getRealTimeLimitUpBoardData } from './lib/realtimeLimitUpService';
 import { fetchStockDragonTigerDetail } from './lib/stockDragonTigerService';
+import { fetchFuturesQuote, fetchFuturesKline, searchFutures } from './lib/futuresService';
+import { fetchSectorDetail, fetchSectorKline, searchSectors } from './lib/sectorService';
+import { FUTURES_DATABASE } from './lib/futuresData';
+import { SECTOR_DATABASE } from './lib/sectorCatalog';
 import type { KlinePoint, StockQuote, StockSearchResult } from './src/types';
 
 /**
@@ -107,85 +111,112 @@ async function startServer() {
     res.json(result);
   }));
 
-  // 2. Search stock endpoint
+  // 2. Comprehensive Multi-Asset Search endpoint (Stocks, Sectors, Futures)
   app.get('/api/search', withJsonSafety(async (req, res) => {
     const query = String(req.query.q || '').trim();
+    const category = String(req.query.category || 'all').toLowerCase(); // 'all' | 'stock' | 'sector' | 'futures'
+
+    // 1. If empty, return popular recommended assets from all 3 classes
     if (!query) {
-      return res.json({ results: PRESET_DATABASE.slice(0, 10) });
+      const defaultStocks = PRESET_DATABASE.slice(0, 8);
+      const defaultSectors = searchSectors('');
+      const defaultFutures = searchFutures('');
+      return res.json({
+        results: [...defaultStocks, ...defaultSectors.slice(0, 4), ...defaultFutures.slice(0, 4)],
+        stocks: defaultStocks,
+        sectors: defaultSectors,
+        futures: defaultFutures,
+      });
     }
 
     const qLower = query.toLowerCase();
 
-    // 1. Match local preset database
-    const localMatches = PRESET_DATABASE.filter(
-      (item) =>
-        item.code.includes(qLower) ||
-        item.name.toLowerCase().includes(qLower) ||
-        item.pinyin.toLowerCase().includes(qLower)
-    );
+    // 2. Search Sectors
+    const sectorResults = (category === 'all' || category === 'sector') ? searchSectors(query) : [];
 
-    // 2. Try online search via Eastmoney/Tencent if available
-    let onlineResults: StockSearchResult[] = [];
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 2000);
-      const resp = await fetch(
-        `https://suggest3.sinajs.cn/suggest/type=11,12,13,14,15&key=${encodeURIComponent(query)}`,
-        { signal: controller.signal }
+    // 3. Search Futures
+    const futuresResults = (category === 'all' || category === 'futures') ? searchFutures(query) : [];
+
+    // 4. Search A-Share Stocks & Indices
+    let stockResults: StockSearchResult[] = [];
+    if (category === 'all' || category === 'stock') {
+      const localMatches = PRESET_DATABASE.filter(
+        (item) =>
+          item.code.includes(qLower) ||
+          item.name.toLowerCase().includes(qLower) ||
+          item.pinyin.toLowerCase().includes(qLower)
       );
-      clearTimeout(timer);
-      if (resp.ok) {
-        const text = await decodeGbkResponse(resp);
-        const match = text.match(/="([^"]+)"/);
-        if (match && match[1]) {
-          const items = match[1].split(';');
-          for (const item of items) {
-            const parts = item.split(',');
-            if (parts.length >= 5) {
-              const fullCode = parts[3]; // e.g. sh600519
-              const code = parts[2];
-              const rawName = parts[4];
-              const matchedPreset = PRESET_DATABASE.find((p) => p.code === code);
-              const name = cleanChineseText(rawName, matchedPreset?.name || code);
-              const market = fullCode.startsWith('sh') ? 'sh' : fullCode.startsWith('sz') ? 'sz' : 'bj';
-              onlineResults.push({
-                code,
-                name,
-                pinyin: parts[1] || code,
-                market,
-                fullCode,
-                type: parts[0] === '11' ? 'A股' : '指数',
-              });
+
+      let onlineResults: StockSearchResult[] = [];
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 2000);
+        const resp = await fetch(
+          `https://suggest3.sinajs.cn/suggest/type=11,12,13,14,15&key=${encodeURIComponent(query)}`,
+          { signal: controller.signal }
+        );
+        clearTimeout(timer);
+        if (resp.ok) {
+          const text = await decodeGbkResponse(resp);
+          const match = text.match(/="([^"]+)"/);
+          if (match && match[1]) {
+            const items = match[1].split(';');
+            for (const item of items) {
+              const parts = item.split(',');
+              if (parts.length >= 5) {
+                const fullCode = parts[3]; // e.g. sh600519
+                const code = parts[2];
+                const rawName = parts[4];
+                const matchedPreset = PRESET_DATABASE.find((p) => p.code === code);
+                const name = cleanChineseText(rawName, matchedPreset?.name || code);
+                const market = fullCode.startsWith('sh') ? 'sh' : fullCode.startsWith('sz') ? 'sz' : 'bj';
+                onlineResults.push({
+                  code,
+                  name,
+                  pinyin: parts[1] || code,
+                  market,
+                  fullCode,
+                  type: parts[0] === '11' ? 'A股' : '指数',
+                });
+              }
             }
           }
         }
+      } catch {
+        // Ignore network timeout
       }
-    } catch {
-      // Ignore network timeout
-    }
 
-    // Merge and deduplicate
-    const map = new Map<string, StockSearchResult>();
-    for (const item of [...localMatches, ...onlineResults]) {
-      if (!map.has(item.code)) {
-        map.set(item.code, item);
+      const map = new Map<string, StockSearchResult>();
+      for (const item of [...localMatches, ...onlineResults]) {
+        if (!map.has(item.code)) {
+          map.set(item.code, item);
+        }
       }
+
+      if (map.size === 0 && /^\d+$/.test(query)) {
+        const norm = normalizeStockCode(query);
+        map.set(norm.code, {
+          code: norm.code,
+          name: norm.nameHint || `标的 ${norm.code}`,
+          pinyin: norm.code,
+          market: norm.market,
+          fullCode: norm.fullCode,
+          type: norm.isIndex ? '指数' : 'A股',
+        });
+      }
+
+      stockResults = Array.from(map.values());
     }
 
-    // If still no matches, parse as direct stock code
-    if (map.size === 0 && /^\d+$/.test(query)) {
-      const norm = normalizeStockCode(query);
-      map.set(norm.code, {
-        code: norm.code,
-        name: norm.nameHint || `标的 ${norm.code}`,
-        pinyin: norm.code,
-        market: norm.market,
-        fullCode: norm.fullCode,
-        type: norm.isIndex ? '指数' : 'A股',
-      });
-    }
+    // Consolidated results prioritized by relevance
+    const consolidated = [...sectorResults, ...futuresResults, ...stockResults];
 
-    res.json({ results: Array.from(map.values()).slice(0, 15) });
+    res.json({
+      results: consolidated.slice(0, 20),
+      stocks: stockResults.slice(0, 10),
+      sectors: sectorResults.slice(0, 10),
+      futures: futuresResults.slice(0, 10),
+    });
   }));
 
   // 3. Market context endpoint
@@ -194,10 +225,99 @@ async function startServer() {
     res.json({ indices, timestamp: Date.now() });
   }));
 
-  // 4. K-line and Quote endpoint
+  // 3.1 Sector Detail endpoint
+  app.get('/api/sector-detail', withJsonSafety(async (req, res) => {
+    const code = String(req.query.code || req.query.sector || '').trim();
+    if (!code) {
+      return res.status(400).json({ error: 'Sector code or name is required' });
+    }
+    const data = await fetchSectorDetail(code);
+    if (!data) {
+      return res.status(404).json({ error: 'Sector not found' });
+    }
+    res.json(data);
+  }));
+
+  // 3.2 Futures Detail endpoint
+  app.get('/api/futures-detail', withJsonSafety(async (req, res) => {
+    const symbol = String(req.query.symbol || req.query.code || '').trim();
+    if (!symbol) {
+      return res.status(400).json({ error: 'Futures symbol is required' });
+    }
+    const data = await fetchFuturesQuote(symbol);
+    if (!data || !data.quote) {
+      return res.status(404).json({ error: 'Futures symbol not found' });
+    }
+    res.json(data);
+  }));
+
+  // 3.3 Hot Assets (Stocks, Sectors, Futures) for quick navigation
+  app.get('/api/hot-assets', withJsonSafety(async (req, res) => {
+    const hotSectors = SECTOR_DATABASE.slice(0, 6).map((s) => ({
+      code: s.code,
+      name: s.name,
+      category: s.category,
+      leadStockName: s.leadStockName,
+    }));
+    const hotFutures = FUTURES_DATABASE.slice(0, 8).map((f) => ({
+      symbol: f.symbol,
+      name: f.name,
+      subCategory: f.subCategory,
+      exchange: f.exchange,
+    }));
+    const hotStocks = [
+      { code: '300862', name: '蓝盾光电', tag: '低空经济' },
+      { code: '688286', name: '敏芯股份', tag: '半导体' },
+      { code: '300017', name: '网宿科技', tag: '算力CPO' },
+      { code: '603330', name: '天洋新材', tag: '固态电池' },
+      { code: '001260', name: '坤泰股份', tag: '汽车配件' },
+      { code: '600519', name: '贵州茅台', tag: '核心白马' },
+    ];
+    res.json({ sectors: hotSectors, futures: hotFutures, stocks: hotStocks });
+  }));
+
+  // 4. K-line and Quote endpoint (Unified for Stocks, Sectors, Futures)
   app.get('/api/kline', withJsonSafety(async (req, res) => {
-    const rawCode = String(req.query.code || '600519');
-    const period = String(req.query.period || 'day'); // day, 1m, 5m, 15m, 30m, 60m, 90m, 120m
+    const rawCode = String(req.query.code || '600519').trim();
+    const period = String(req.query.period || 'day') as KlinePeriod; // day, 1m, 5m, 15m, 30m, 60m, 90m, 120m
+
+    // A. Check if the target is a Futures Contract (e.g. AU0, AG0, RB0, CU0, SC0, IF0, hf_CL, etc.)
+    const isFuture =
+      FUTURES_DATABASE.some((f) => f.symbol.toLowerCase() === rawCode.toLowerCase()) ||
+      rawCode.startsWith('hf_') ||
+      /^(RB|HC|I|J|JM|CU|AL|ZN|NI|SN|AU|AG|SC|MA|TA|SA|FG|LC|SI|IF|IC|IM|IH|T|TF|TS)\d*$/i.test(rawCode);
+
+    if (isFuture) {
+      const { quote, futureInfo } = await fetchFuturesQuote(rawCode);
+      const klineData = await fetchFuturesKline(rawCode, period);
+      return res.json({
+        quote,
+        klineData,
+        assetType: 'futures',
+        futureInfo,
+      });
+    }
+
+    // B. Check if the target is a Sector / Concept (e.g. BK_DKJJ, BK_SEMICONDUCTOR, or sector name)
+    const isSector =
+      rawCode.startsWith('BK_') ||
+      SECTOR_DATABASE.some((s) => s.code.toLowerCase() === rawCode.toLowerCase() || s.name === rawCode);
+
+    if (isSector) {
+      const sectorDetail = await fetchSectorDetail(rawCode);
+      if (sectorDetail) {
+        const klineData = await fetchSectorKline(sectorDetail.sector.code, period);
+        return res.json({
+          quote: sectorDetail.quote,
+          klineData,
+          assetType: 'sector',
+          sector: sectorDetail.sector,
+          constituents: sectorDetail.constituents,
+        });
+      }
+    }
+
+    // C. Regular A-Share Stock or Market Index
     const norm = normalizeStockCode(rawCode);
 
     let quote: StockQuote | null = null;

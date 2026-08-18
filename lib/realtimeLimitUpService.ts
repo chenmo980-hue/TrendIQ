@@ -42,14 +42,15 @@ const CACHE_TTL_MS = 15000; // 15s cache for real-time market data
 // ============================================================================
 
 /**
- * Fetch real-time quotes for a list of stock codes from Eastmoney
+ * Fetch real-time quotes for a list of stock codes from Eastmoney or Tencent
  */
 async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<LimitUpStock[]> {
   if (stocks.length === 0) return stocks;
 
+  // 1. Try Eastmoney
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 2500);
 
     const codes = stocks.map((s) => (s.market === 'sh' ? '1.' : '0.') + s.code).join(',');
     const url = `https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2&fields=f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f22,f23&secids=${codes}`;
@@ -63,32 +64,91 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
     });
     clearTimeout(timer);
 
-    if (!resp.ok) return stocks;
+    if (resp.ok) {
+      const json = await resp.json();
+      const quoteMap = new Map<string, any>();
+      for (const item of json?.data?.diff || []) {
+        const code = item.f12 || '';
+        if (code) quoteMap.set(code, item);
+      }
 
-    const json = await resp.json();
-    const quoteMap = new Map<string, any>();
-    for (const item of json?.data?.diff || []) {
-      const code = item.f12 || '';
-      if (code) quoteMap.set(code, item);
+      if (quoteMap.size > 0) {
+        return stocks.map((s) => {
+          const live = quoteMap.get(s.code);
+          if (!live) return s;
+          return {
+            ...s,
+            price: parseFloat(live.f2) || s.price,
+            changePercent: parseFloat(live.f3) || s.changePercent,
+            change: parseFloat(live.f4) || s.change,
+            turnover: (parseFloat(live.f6) || 0) * 10000,
+            turnoverRate: parseFloat(live.f8) || s.turnoverRate,
+            marketCap: parseFloat(live.f20) || s.marketCap,
+          };
+        });
+      }
     }
-
-    // Merge live quotes into static stocks (preserve consecutiveBoards, sector, concepts, etc.)
-    return stocks.map((s) => {
-      const live = quoteMap.get(s.code);
-      if (!live) return s;
-      return {
-        ...s,
-        price: parseFloat(live.f2) || s.price,
-        changePercent: parseFloat(live.f3) || s.changePercent,
-        change: parseFloat(live.f4) || s.change,
-        turnover: (parseFloat(live.f6) || 0) * 10000,
-        turnoverRate: parseFloat(live.f8) || s.turnoverRate,
-        marketCap: parseFloat(live.f20) || s.marketCap,
-      };
-    });
   } catch {
-    return stocks;
+    // proceed to Tencent fallback
   }
+
+  // 2. High-speed Tencent quotes fallback
+  try {
+    const fullCodes = stocks.map((s) => normalizeStockCode(s.code).fullCode).join(',');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const resp = await fetch(`https://qt.gtimg.cn/q=${fullCodes}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    if (resp.ok) {
+      const buffer = await resp.arrayBuffer();
+      const text = new TextDecoder('gb18030').decode(buffer);
+      const lines = text.split(';');
+
+      const tencentMap = new Map<string, any>();
+      for (const line of lines) {
+        const match = line.match(/v_([a-z0-9]+)="([^"]+)"/);
+        if (match && match[2]) {
+          const rawCode = match[1];
+          const code = rawCode.replace(/^(sh|sz|bj)/, '');
+          const p = match[2].split('~');
+          if (p.length >= 35) {
+            tencentMap.set(code, {
+              price: parseFloat(p[3]) || 0,
+              change: parseFloat(p[31]) || 0,
+              changePercent: parseFloat(p[32]) || 0,
+              turnover: (parseFloat(p[37]) || 0) * 10000,
+              turnoverRate: parseFloat(p[38]) || 0,
+              marketCap: (parseFloat(p[45]) || 0) * 100000000,
+            });
+          }
+        }
+      }
+
+      if (tencentMap.size > 0) {
+        return stocks.map((s) => {
+          const live = tencentMap.get(s.code);
+          if (!live || live.price === 0) return s;
+          return {
+            ...s,
+            price: live.price,
+            changePercent: live.changePercent,
+            change: live.change,
+            turnover: live.turnover || s.turnover,
+            turnoverRate: live.turnoverRate || s.turnoverRate,
+            marketCap: live.marketCap || s.marketCap,
+          };
+        });
+      }
+    }
+  } catch {
+    // return stocks
+  }
+
+  return stocks;
 }
 
 // ============================================================================
