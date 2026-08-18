@@ -35,6 +35,7 @@ export function searchSectors(query: string): StockSearchResult[] {
   return SECTOR_DATABASE.filter(
     (s) =>
       s.code.toLowerCase().includes(q) ||
+      s.bkCode.toLowerCase().includes(q) ||
       s.name.toLowerCase().includes(q) ||
       s.category.toLowerCase().includes(q) ||
       s.description.toLowerCase().includes(q) ||
@@ -56,6 +57,7 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
   const sector = SECTOR_DATABASE.find(
     (s) =>
       s.code.toLowerCase() === codeOrName.toLowerCase() ||
+      s.bkCode.toLowerCase() === codeOrName.toLowerCase() ||
       s.name.toLowerCase() === codeOrName.toLowerCase() ||
       s.name.includes(codeOrName) ||
       codeOrName.includes(s.name)
@@ -63,7 +65,41 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
 
   if (!sector) return null;
 
-  // Fetch real-time quotes for all constituent stocks via Tencent
+  // 1. Fetch real sector index latest quote from Eastmoney K-line API
+  let sectorIndexPrice = 1000;
+  let sectorIndexChange = 0;
+  let sectorIndexChangePercent = 0;
+  let sectorOpen = 1000;
+  let sectorHigh = 1000;
+  let sectorLow = 1000;
+  let sectorPrevClose = 1000;
+  let sectorVolume = 0;
+  let sectorTurnover = 0;
+
+  try {
+    const kurl = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${sector.bkCode}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&end=20500101&lmt=2`;
+    const resp = await fetch(kurl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    if (resp.ok) {
+      const json = await resp.json();
+      const klines = json?.data?.klines;
+      if (Array.isArray(klines) && klines.length > 0) {
+        const latest = klines[klines.length - 1].split(',');
+        sectorOpen = parseFloat(latest[1]) || 1000;
+        sectorIndexPrice = parseFloat(latest[2]) || sectorOpen;
+        sectorHigh = parseFloat(latest[3]) || Math.max(sectorOpen, sectorIndexPrice);
+        sectorLow = parseFloat(latest[4]) || Math.min(sectorOpen, sectorIndexPrice);
+        sectorVolume = parseFloat(latest[5]) || 0;
+        sectorTurnover = parseFloat(latest[6]) || 0;
+        sectorIndexChangePercent = parseFloat(latest[8]) || 0;
+        sectorIndexChange = parseFloat(latest[9]) || +(sectorIndexPrice * (sectorIndexChangePercent / 100)).toFixed(2);
+        sectorPrevClose = +(sectorIndexPrice - sectorIndexChange).toFixed(2);
+      }
+    }
+  } catch (e) {
+    console.warn('fetchSectorDetail Eastmoney quote error:', e);
+  }
+
+  // 2. Fetch real-time quotes for all constituent stocks via Tencent
   const fullCodes = sector.constituents.map((c) => normalizeStockCode(c.code).fullCode).join(',');
 
   const enrichedConstituents: {
@@ -76,9 +112,7 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
     isLeader?: boolean;
   }[] = [];
 
-  let totalTurnover = 0;
-  let sumChangePercent = 0;
-  let validCount = 0;
+  let totalStockTurnover = 0;
 
   try {
     const controller = new AbortController();
@@ -129,11 +163,7 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
           isLeader: c.isLeader || c.code === sector.leadStockCode,
         });
 
-        if (price > 0) {
-          sumChangePercent += changePercent;
-          totalTurnover += turnover;
-          validCount++;
-        }
+        totalStockTurnover += turnover;
       }
     }
   } catch (err) {
@@ -152,18 +182,12 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
         turnover: 1200000000,
         isLeader: c.isLeader || c.code === sector.leadStockCode,
       });
-      sumChangePercent += 3.84;
-      totalTurnover += 1200000000;
-      validCount++;
+      totalStockTurnover += 1200000000;
     });
   }
 
   // Sort constituents by changePercent descending
   enrichedConstituents.sort((a, b) => b.changePercent - a.changePercent);
-
-  const avgChangePercent = validCount > 0 ? +(sumChangePercent / validCount).toFixed(2) : 0;
-  const sectorIndexPrice = +(1000 * (1 + avgChangePercent / 100)).toFixed(2);
-  const sectorIndexChange = +(sectorIndexPrice - 1000).toFixed(2);
 
   const quote: StockQuote = {
     code: sector.code,
@@ -171,13 +195,13 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
     fullCode: sector.code,
     price: sectorIndexPrice,
     change: sectorIndexChange,
-    changePercent: avgChangePercent,
-    open: 1000,
-    high: +(sectorIndexPrice * 1.01).toFixed(2),
-    low: +(sectorIndexPrice * 0.99).toFixed(2),
-    prevClose: 1000,
-    volume: validCount * 500000,
-    turnover: totalTurnover,
+    changePercent: sectorIndexChangePercent,
+    open: sectorOpen,
+    high: sectorHigh,
+    low: sectorLow,
+    prevClose: sectorPrevClose,
+    volume: sectorVolume || enrichedConstituents.length * 500000,
+    turnover: sectorTurnover || totalStockTurnover,
     timestamp: Date.now(),
     isIndex: true,
   };
@@ -190,44 +214,50 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
 }
 
 /**
- * Fetches or calculates K-line for a sector (synthesized from leader stock and market trends)
+ * Fetches authentic K-line for a sector from Eastmoney Sector API (push2his.eastmoney.com)
  */
 export async function fetchSectorKline(sectorCode: string, period: KlinePeriod): Promise<KlinePoint[]> {
-  const sector = SECTOR_DATABASE.find((s) => s.code.toLowerCase() === sectorCode.toLowerCase() || s.name.includes(sectorCode));
+  const sector = SECTOR_DATABASE.find(
+    (s) =>
+      s.code.toLowerCase() === sectorCode.toLowerCase() ||
+      s.bkCode.toLowerCase() === sectorCode.toLowerCase() ||
+      s.name.includes(sectorCode) ||
+      sectorCode.includes(s.name)
+  );
   if (!sector) return [];
 
-  // Fetch leader stock's K-line as the benchmark shape
-  const norm = normalizeStockCode(sector.leadStockCode);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
-    const qfqUrl = `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${norm.fullCode},day,,,180,qfq`;
+    let klt = 101; // day
+    if (period === '1m' || period === '5m') klt = 5;
+    else if (period === '15m') klt = 15;
+    else if (period === '30m') klt = 30;
+    else if (period === '60m' || period === '90m' || period === '120m') klt = 60;
 
-    const qfqResp = await fetch(qfqUrl, {
+    const limit = period === 'day' ? 180 : 120;
+    const kurl = `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${sector.bkCode}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=${klt}&fqt=1&end=20500101&lmt=${limit}`;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(kurl, {
       signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://finance.qq.com' },
+      headers: { 'User-Agent': 'Mozilla/5.0' },
     });
     clearTimeout(timer);
 
-    if (qfqResp.ok) {
-      const rawJson = await qfqResp.json();
-      const stockObj = rawJson.data?.[norm.fullCode];
-      const list = stockObj?.qfqday || stockObj?.day || [];
-      if (Array.isArray(list) && list.length > 0) {
-        const firstPrice = parseFloat(list[0][2]) || 1;
-        return list.map((item: any) => {
-          const time = String(item[0] || '');
-          const openRaw = parseFloat(item[1]) || 0;
-          const closeRaw = parseFloat(item[2]) || 0;
-          const highRaw = parseFloat(item[3]) || Math.max(openRaw, closeRaw);
-          const lowRaw = parseFloat(item[4]) || Math.min(openRaw, closeRaw);
+    if (resp.ok) {
+      const json = await resp.json();
+      const klines = json?.data?.klines;
+      if (Array.isArray(klines) && klines.length > 0) {
+        return klines.map((row: string) => {
+          const p = row.split(',');
+          const time = p[0];
+          const open = parseFloat(p[1]) || 0;
+          const close = parseFloat(p[2]) || 0;
+          const high = parseFloat(p[3]) || Math.max(open, close);
+          const low = parseFloat(p[4]) || Math.min(open, close);
+          const volume = parseFloat(p[5]) || 0;
+          const turnover = parseFloat(p[6]) || 0;
 
-          // Rescale relative to 1000 base points for sector index
-          const open = +((openRaw / firstPrice) * 1000).toFixed(2);
-          const close = +((closeRaw / firstPrice) * 1000).toFixed(2);
-          const high = +((highRaw / firstPrice) * 1000).toFixed(2);
-          const low = +((lowRaw / firstPrice) * 1000).toFixed(2);
-          const volume = (parseFloat(item[5]) || 0) * 100;
           return {
             time,
             open,
@@ -235,7 +265,7 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
             low,
             close,
             volume,
-            turnover: volume * close,
+            turnover,
           };
         });
       }

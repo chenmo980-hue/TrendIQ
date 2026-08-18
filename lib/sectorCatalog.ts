@@ -1,5 +1,6 @@
 export interface SectorItem {
   code: string; // e.g. "BK_DKJJ", "BK_SEMICONDUCTOR", "BK_AI_POWER"
+  bkCode: string; // Eastmoney BK Code, e.g. "BK1166", "BK0980", "BK1128"
   name: string; // e.g. "低空经济", "半导体芯片", "算力与AI"
   category: '主线题材' | '高景气制造' | '核心资产' | '周期资源' | '金融消费';
   description: string;
@@ -12,6 +13,7 @@ export interface SectorItem {
 export const SECTOR_DATABASE: SectorItem[] = [
   {
     code: 'BK_DKJJ',
+    bkCode: 'BK1166',
     name: '低空经济',
     category: '主线题材',
     description: 'eVTOL电动垂直起降航空器、低空空域管制作战系统、无人机物流与通航基础设施。',
@@ -30,6 +32,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_SEMICONDUCTOR',
+    bkCode: 'BK0980',
     name: '半导体芯片',
     category: '高景气制造',
     description: '先进光刻胶、存储芯片、封测设备、EDA软件及高端功率半导体国产化替代。',
@@ -48,6 +51,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_AI_POWER',
+    bkCode: 'BK1128',
     name: '算力与CPO光模块',
     category: '主线题材',
     description: '智算中心IDC、CPO光模块、液冷服务器、光纤光缆与大模型端侧部署。',
@@ -66,6 +70,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_ROBOT',
+    bkCode: 'BK1090',
     name: '人形机器人',
     category: '高景气制造',
     description: '行星滚柱丝杠、六维力传感器、空心杯电机、减速器与具身智能大模型。',
@@ -84,6 +89,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_BATTERY',
+    bkCode: 'BK0968',
     name: '固态电池与锂电',
     category: '高景气制造',
     description: '全固态电解质、高镍三元正极、硅碳负极、电池级碳酸锂与储能系统。',
@@ -101,6 +107,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_AUTO',
+    bkCode: 'BK0481',
     name: '智能汽车与零部件',
     category: '高景气制造',
     description: '智能座舱、自动驾驶域控制器、汽车轻量化饰件、线控底盘。',
@@ -118,6 +125,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_SECURITIES',
+    bkCode: 'BK0473',
     name: '证券券商与金融',
     category: '金融消费',
     description: '头部券商整合并购、财富管理、衍生品交易与资本市场改革红利。',
@@ -135,6 +143,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_RARE_EARTH',
+    bkCode: 'BK0578',
     name: '稀土永磁与新材料',
     category: '周期资源',
     description: '高性能钕铁硼永磁材料、重稀土配额管控、新能源电机与军工配套。',
@@ -151,6 +160,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_MEDICAL',
+    bkCode: 'BK0465',
     name: '医疗服务与医药',
     category: '核心资产',
     description: '创新药出海、医美康养、医疗服务、中药创新与医疗器械。',
@@ -168,6 +178,7 @@ export const SECTOR_DATABASE: SectorItem[] = [
   },
   {
     code: 'BK_LIQUOR',
+    bkCode: 'BK0493',
     name: '白酒与高端消费',
     category: '核心资产',
     description: '高端酱香白酒、次高端浓香白酒、品牌消费品。',
@@ -183,4 +194,39 @@ export const SECTOR_DATABASE: SectorItem[] = [
       { code: '600779', name: '水井坊' },
     ],
   },
+  {
+    code: 'BK_AEROSPACE',
+    bkCode: 'BK1173',
+    name: '商业航天与卫星',
+    category: '主线题材',
+    description: '低轨卫星互联网、千帆星座组网、可回收液体运载火箭与星载相控阵雷达。',
+    leadStockCode: '600118',
+    leadStockName: '中国卫星',
+    catalyst: '我国商业航天千帆极轨星座发射提速，卫星互联网地面终端规模化商用加速。',
+    constituents: [
+      { code: '600118', name: '中国卫星', isLeader: true },
+      { code: '603200', name: '上海瀚讯' },
+      { code: '300053', name: '航天发展' },
+      { code: '688568', name: '中科星图' },
+      { code: '600879', name: '航天电子' },
+    ],
+  },
+  {
+    code: 'BK_ENERGY_STORAGE',
+    bkCode: 'BK0989',
+    name: '光伏与新型储能',
+    category: '高景气制造',
+    description: '大储电站EPC、工商业储能、TOPCon/HJT光伏电池组件、微逆变器。',
+    leadStockCode: '300274',
+    leadStockName: '阳光电源',
+    catalyst: '全球大储需求爆发，储能电芯价格企稳，海外微电网与工商业储能装机量高增。',
+    constituents: [
+      { code: '300274', name: '阳光电源', isLeader: true },
+      { code: '601012', name: '隆基绿能' },
+      { code: '600438', name: '通威股份' },
+      { code: '601877', name: '正泰电器' },
+      { code: '300763', name: '锦浪科技' },
+    ],
+  },
 ];
+

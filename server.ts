@@ -14,7 +14,7 @@ import { fetchFuturesQuote, fetchFuturesKline, searchFutures } from './lib/futur
 import { fetchSectorDetail, fetchSectorKline, searchSectors } from './lib/sectorService';
 import { FUTURES_DATABASE } from './lib/futuresData';
 import { SECTOR_DATABASE } from './lib/sectorCatalog';
-import type { KlinePoint, StockQuote, StockSearchResult } from './src/types';
+import type { KlinePoint, StockQuote, StockSearchResult, KlinePeriod } from './src/types';
 
 /**
  * Safely decodes GBK/GB18030/GB2312 or UTF-8 HTTP response streams
@@ -388,11 +388,11 @@ async function startServer() {
 
     // 2. High-speed Live K-line fetching with QFQ (Forward-adjusted / 前复权) support
     try {
-      // For Day/Week/Month, fetch authentic QFQ (前复权) K-lines matching Flush / TongDaXin
-      if (period === 'day' || period === 'week' || period === 'month') {
+      // For Day K-lines, fetch authentic QFQ (前复权) K-lines matching Flush / TongDaXin
+      if (period === 'day') {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 3500);
-        const pParam = period === 'day' ? 'day' : period;
+        const pParam = 'day';
         const qfqUrl = `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${norm.fullCode},${pParam},,,500,qfq`;
 
         const qfqResp = await fetch(qfqUrl, {

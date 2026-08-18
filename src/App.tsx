@@ -32,17 +32,19 @@ interface FrequentStock {
 const POPULAR_SECTORS = [
   { code: 'BK_DKJJ', name: '低空经济', category: '核心题材' },
   { code: 'BK_SEMICONDUCTOR', name: '半导体芯片', category: '高景气制造' },
-  { code: 'BK_CPO', name: '算力与CPO', category: 'AI主线' },
+  { code: 'BK_AI_POWER', name: '算力与CPO', category: 'AI主线' },
   { code: 'BK_BATTERY', name: '固态电池', category: '新能源' },
   { code: 'BK_ROBOT', name: '人形机器人', category: '核心题材' },
-  { code: 'BK_BROKER', name: '证券券商', category: '金融权重' },
+  { code: 'BK_SECURITIES', name: '证券券商', category: '金融权重' },
+  { code: 'BK_AEROSPACE', name: '商业航天', category: '前沿制造' },
 ];
 
 const POPULAR_FUTURES = [
+  { symbol: 'SC2609', name: '原油2609', subCategory: '能源化工' },
+  { symbol: 'SC0', name: '原油连续', subCategory: '能源化工' },
   { symbol: 'RB0', name: '螺纹钢', subCategory: '黑色系' },
   { symbol: 'CU0', name: '沪铜', subCategory: '有色金属' },
   { symbol: 'AU0', name: '沪金', subCategory: '贵金属' },
-  { symbol: 'SC0', name: '原油主力', subCategory: '能化' },
   { symbol: 'IF0', name: 'IF沪深300', subCategory: '股指' },
   { symbol: 'IM0', name: 'IM中证1000', subCategory: '股指' },
   { symbol: 'hf_CL', name: 'WTI原油', subCategory: '外盘' },

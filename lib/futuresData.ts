@@ -1,6 +1,6 @@
 export interface FutureItem {
-  symbol: string; // e.g. "RB0", "CU0", "AU0", "IF0", "hf_CL", "hf_GC"
-  name: string; // e.g. "螺纹钢连续", "沪铜连续", "沪金连续"
+  symbol: string; // e.g. "SC2609", "RB0", "CU0", "AU0", "IF0", "hf_CL", "hf_GC"
+  name: string; // e.g. "原油2609", "螺纹钢连续", "沪铜连续", "沪金连续"
   category: '商品期货' | '股指国债' | '外盘期货';
   subCategory: '黑色系' | '有色金属' | '贵金属' | '能源化工' | '农产品' | '金融期指' | '国债期货' | '全球大宗' | '全球股指';
   exchange: '上期所' | '大商所' | '郑商所' | '中金所' | '能源中心' | '广期所' | 'NYMEX' | 'COMEX' | 'LME' | 'CME';
@@ -8,6 +8,917 @@ export interface FutureItem {
   isGlobal?: boolean;
   relatedSectors: string[]; // 关联A股行业板块
   relatedStocks: { code: string; name: string }[]; // 核心期现联动标的
+}
+
+// Commodity Root Directory for dynamic parsing of any contract (e.g. SC2609 -> 上海原油 2609合约)
+export interface CommodityRootInfo {
+  prefix: string;
+  name: string;
+  category: '商品期货' | '股指国债' | '外盘期货';
+  subCategory: '黑色系' | '有色金属' | '贵金属' | '能源化工' | '农产品' | '金融期指' | '国债期货' | '全球大宗' | '全球股指';
+  exchange: '上期所' | '大商所' | '郑商所' | '中金所' | '能源中心' | '广期所' | 'NYMEX' | 'COMEX' | 'LME' | 'CME';
+  unit: string;
+  relatedSectors: string[];
+  relatedStocks: { code: string; name: string }[];
+}
+
+export const COMMODITY_ROOTS: Record<string, CommodityRootInfo> = {
+  // 能源化工
+  SC: {
+    prefix: 'SC',
+    name: '原油',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '能源中心',
+    unit: '元/桶',
+    relatedSectors: ['石油开采', '油服工程', '炼化精细化工', '航运港口'],
+    relatedStocks: [
+      { code: '600938', name: '中国海油' },
+      { code: '601857', name: '中国石油' },
+      { code: '600028', name: '中国石化' },
+      { code: '603619', name: '中曼石油' },
+      { code: '601808', name: '中海油服' },
+    ],
+  },
+  LU: {
+    prefix: 'LU',
+    name: '低硫燃料油',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '能源中心',
+    unit: '元/吨',
+    relatedSectors: ['燃油贸易', '航运物流', '港口储运'],
+    relatedStocks: [
+      { code: '600028', name: '中国石化' },
+      { code: '601872', name: '招商轮船' },
+    ],
+  },
+  FU: {
+    prefix: 'FU',
+    name: '燃料油',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['航运燃油', '石油化工', '炼化'],
+    relatedStocks: [
+      { code: '600028', name: '中国石化' },
+      { code: '600938', name: '中国海油' },
+    ],
+  },
+  BU: {
+    prefix: 'BU',
+    name: '石油沥青',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['道路基建', '建筑防水', '石油炼化'],
+    relatedStocks: [
+      { code: '300072', name: '海新能科' },
+      { code: '002271', name: '东方雨虹' },
+      { code: '300715', name: '凯伦股份' },
+    ],
+  },
+  RU: {
+    prefix: 'RU',
+    name: '天然橡胶',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['轮胎制造', '橡胶制品', '汽车零部件'],
+    relatedStocks: [
+      { code: '601118', name: '海南橡胶' },
+      { code: '601058', name: '赛轮轮胎' },
+      { code: '600466', name: '蓝帆医疗' },
+      { code: '601966', name: '玲珑轮胎' },
+    ],
+  },
+  NR: {
+    prefix: 'NR',
+    name: '20号胶',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '能源中心',
+    unit: '元/吨',
+    relatedSectors: ['轮胎出口', '商用车胎', '汽车工业'],
+    relatedStocks: [
+      { code: '601118', name: '海南橡胶' },
+      { code: '601058', name: '赛轮轮胎' },
+    ],
+  },
+  SP: {
+    prefix: 'SP',
+    name: '纸浆',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['造纸包装', '轻工制造', '纸制品'],
+    relatedStocks: [
+      { code: '000488', name: '晨鸣纸业' },
+      { code: '002078', name: '太阳纸业' },
+      { code: '600963', name: '岳阳林纸' },
+    ],
+  },
+  MA: {
+    prefix: 'MA',
+    name: '甲醇',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['煤化工', '精细化工', '甲醇制烯烃'],
+    relatedStocks: [
+      { code: '600426', name: '华鲁恒升' },
+      { code: '600989', name: '宝丰能源' },
+      { code: '600691', name: '阳煤化工' },
+    ],
+  },
+  TA: {
+    prefix: 'TA',
+    name: 'PTA',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['化纤纺织', '聚酯产业链', '精细化工'],
+    relatedStocks: [
+      { code: '002493', name: '荣盛石化' },
+      { code: '000703', name: '恒逸石化' },
+      { code: '600346', name: '恒力石化' },
+    ],
+  },
+  SA: {
+    prefix: 'SA',
+    name: '纯碱',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['玻璃纯碱', '光伏玻璃', '无机盐化工'],
+    relatedStocks: [
+      { code: '000683', name: '远兴能源' },
+      { code: '600409', name: '三友化工' },
+      { code: '000822', name: '山东海化' },
+    ],
+  },
+  FG: {
+    prefix: 'FG',
+    name: '玻璃',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['建筑玻璃', '光伏玻璃', '汽车玻璃'],
+    relatedStocks: [
+      { code: '600586', name: '金晶科技' },
+      { code: '601636', name: '旗滨集团' },
+      { code: '600660', name: '福耀玻璃' },
+    ],
+  },
+  EG: {
+    prefix: 'EG',
+    name: '乙二醇',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['聚酯纺织', '防冻液', '精细化工'],
+    relatedStocks: [
+      { code: '600346', name: '恒力石化' },
+      { code: '000301', name: '东方盛虹' },
+    ],
+  },
+  EB: {
+    prefix: 'EB',
+    name: '苯乙烯',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['塑料家电', 'EPS泡沫', '合成橡胶'],
+    relatedStocks: [
+      { code: '600028', name: '中国石化' },
+      { code: '600426', name: '华鲁恒升' },
+    ],
+  },
+  PP: {
+    prefix: 'PP',
+    name: '聚丙烯',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['塑料包装', '医疗耗材', '汽车轻量化'],
+    relatedStocks: [
+      { code: '600989', name: '宝丰能源' },
+      { code: '600309', name: '万华化学' },
+    ],
+  },
+  L: {
+    prefix: 'L',
+    name: '塑料(LLDPE)',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['农膜塑料', '包装材料', '石化产业链'],
+    relatedStocks: [
+      { code: '600989', name: '宝丰能源' },
+      { code: '600309', name: '万华化学' },
+    ],
+  },
+  V: {
+    prefix: 'V',
+    name: 'PVC(聚氯乙烯)',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['管材管件', '型材门窗', '建筑材料'],
+    relatedStocks: [
+      { code: '002092', name: '中泰化学' },
+      { code: '600722', name: '金牛化工' },
+    ],
+  },
+  PG: {
+    prefix: 'PG',
+    name: 'LPG(液化气)',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['燃气供热', '烷烃深加工', '化工原料'],
+    relatedStocks: [
+      { code: '002221', name: '东华能源' },
+      { code: '000593', name: '德龙汇能' },
+    ],
+  },
+
+  // 贵金属
+  AU: {
+    prefix: 'AU',
+    name: '沪金',
+    category: '商品期货',
+    subCategory: '贵金属',
+    exchange: '上期所',
+    unit: '元/克',
+    relatedSectors: ['贵金属', '黄金概念', '珠宝首饰', '避险资产'],
+    relatedStocks: [
+      { code: '600547', name: '山东黄金' },
+      { code: '600489', name: '中金黄金' },
+      { code: '601899', name: '紫金矿业' },
+      { code: '002155', name: '湖南黄金' },
+      { code: '600988', name: '赤峰黄金' },
+    ],
+  },
+  AG: {
+    prefix: 'AG',
+    name: '沪银',
+    category: '商品期货',
+    subCategory: '贵金属',
+    exchange: '上期所',
+    unit: '元/千克',
+    relatedSectors: ['贵金属', '白银概念', '光伏银浆', '电子工业'],
+    relatedStocks: [
+      { code: '000506', name: '中润资源' },
+      { code: '000975', name: '银泰黄金' },
+      { code: '600362', name: '江西铜业' },
+      { code: '300655', name: '晶瑞电材' },
+    ],
+  },
+
+  // 黑色系
+  RB: {
+    prefix: 'RB',
+    name: '螺纹钢',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['钢铁行业', '建筑材料', '基建地产'],
+    relatedStocks: [
+      { code: '600019', name: '宝钢股份' },
+      { code: '000932', name: '华菱钢铁' },
+      { code: '600569', name: '安阳钢铁' },
+      { code: '000709', name: '河钢股份' },
+    ],
+  },
+  HC: {
+    prefix: 'HC',
+    name: '热轧卷板',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['钢铁行业', '制造业', '汽车用钢', '家电板材'],
+    relatedStocks: [
+      { code: '600019', name: '宝钢股份' },
+      { code: '600808', name: '马钢股份' },
+      { code: '000778', name: '新兴铸管' },
+    ],
+  },
+  I: {
+    prefix: 'I',
+    name: '铁矿石',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['钢铁采选', '黑色金属', '港口航运'],
+    relatedStocks: [
+      { code: '000655', name: '金岭矿业' },
+      { code: '600307', name: '酒钢宏兴' },
+      { code: '601003', name: '柳钢股份' },
+      { code: '600495', name: '晋西车轴' },
+    ],
+  },
+  J: {
+    prefix: 'J',
+    name: '焦炭',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['煤炭开采', '焦化行业', '钢铁冶炼'],
+    relatedStocks: [
+      { code: '601699', name: '潞安环能' },
+      { code: '600971', name: '恒源煤电' },
+      { code: '600123', name: '兰花科创' },
+      { code: '600985', name: '淮北矿业' },
+    ],
+  },
+  JM: {
+    prefix: 'JM',
+    name: '焦煤',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['煤炭开采', '炼焦煤', '能源开采'],
+    relatedStocks: [
+      { code: '600395', name: '盘江股份' },
+      { code: '600740', name: '山西焦化' },
+      { code: '000983', name: '山西焦煤' },
+    ],
+  },
+  SS: {
+    prefix: 'SS',
+    name: '不锈钢',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['特钢合金', '高端制造', '不锈钢制品'],
+    relatedStocks: [
+      { code: '000825', name: '太钢不锈' },
+      { code: '600126', name: '杭钢股份' },
+    ],
+  },
+  SF: {
+    prefix: 'SF',
+    name: '硅铁',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['铁合金', '钢铁脱氧', '镁合金'],
+    relatedStocks: [
+      { code: '600295', name: '鄂尔多斯' },
+      { code: '600862', name: '中航高科' },
+    ],
+  },
+  SM: {
+    prefix: 'SM',
+    name: '锰硅',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['锰矿采选', '铁合金', '钢铁辅料'],
+    relatedStocks: [
+      { code: '600714', name: '金瑞矿业' },
+      { code: '600301', name: '华锡有色' },
+    ],
+  },
+
+  // 有色金属
+  CU: {
+    prefix: 'CU',
+    name: '沪铜',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '铜产业', '电网设备', '新能源车', 'AI算力电缆'],
+    relatedStocks: [
+      { code: '600362', name: '江西铜业' },
+      { code: '601899', name: '紫金矿业' },
+      { code: '601168', name: '西部矿业' },
+      { code: '000878', name: '云南铜业' },
+      { code: '000630', name: '铜陵有色' },
+    ],
+  },
+  AL: {
+    prefix: 'AL',
+    name: '沪铝',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '铝工业', '轻量化汽车', '光伏支架'],
+    relatedStocks: [
+      { code: '601600', name: '中国铝业' },
+      { code: '600219', name: '南山铝业' },
+      { code: '000807', name: '云铝股份' },
+      { code: '002578', name: '闽发铝业' },
+    ],
+  },
+  ZN: {
+    prefix: 'ZN',
+    name: '沪锌',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '锌冶炼', '镀锌防腐'],
+    relatedStocks: [
+      { code: '000060', name: '中金岭南' },
+      { code: '600497', name: '驰宏锌锗' },
+      { code: '000751', name: '锌业股份' },
+    ],
+  },
+  NI: {
+    prefix: 'NI',
+    name: '沪镍',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '三元锂电池', '不锈钢'],
+    relatedStocks: [
+      { code: '600478', name: '科力远' },
+      { code: '603799', name: '华友钴业' },
+      { code: '002340', name: '格林美' },
+      { code: '300919', name: '中伟股份' },
+    ],
+  },
+  SN: {
+    prefix: 'SN',
+    name: '沪锡',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '半导体焊料', '光伏焊带', '电子消费'],
+    relatedStocks: [
+      { code: '000960', name: '锡业股份' },
+      { code: '688599', name: '天合光能' },
+      { code: '300037', name: '新宙邦' },
+    ],
+  },
+  PB: {
+    prefix: 'PB',
+    name: '沪铅',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['铅酸蓄电池', '有色采选', '再生资源'],
+    relatedStocks: [
+      { code: '600261', name: '阳光照明' },
+      { code: '000060', name: '中金岭南' },
+    ],
+  },
+  LC: {
+    prefix: 'LC',
+    name: '碳酸锂',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '广期所',
+    unit: '元/吨',
+    relatedSectors: ['新能源电池', '锂矿开采', '储能设备', '固态电池'],
+    relatedStocks: [
+      { code: '002466', name: '天齐锂业' },
+      { code: '002460', name: '赣锋锂业' },
+      { code: '000792', name: '盐湖股份' },
+      { code: '002192', name: '融捷股份' },
+      { code: '002240', name: '盛新锂能' },
+    ],
+  },
+  SI: {
+    prefix: 'SI',
+    name: '工业硅',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '广期所',
+    unit: '元/吨',
+    relatedSectors: ['光伏硅料', '有机硅', '半导体材料'],
+    relatedStocks: [
+      { code: '603260', name: '合盛硅业' },
+      { code: '600089', name: '特变电工' },
+      { code: '600438', name: '通威股份' },
+      { code: '600141', name: '兴发集团' },
+    ],
+  },
+  EC: {
+    prefix: 'EC',
+    name: '集运欧线',
+    category: '商品期货',
+    subCategory: '全球大宗',
+    exchange: '能源中心',
+    unit: '点',
+    relatedSectors: ['航运港口', '集装箱运力', '外贸出口', '红海局势'],
+    relatedStocks: [
+      { code: '601919', name: '中远海控' },
+      { code: '601872', name: '招商轮船' },
+      { code: '600428', name: '中远海特' },
+      { code: '600798', name: '宁波海运' },
+    ],
+  },
+  SH: {
+    prefix: 'SH',
+    name: '烧碱',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['氯碱化工', '氧化铝', '造纸化纤'],
+    relatedStocks: [
+      { code: '002092', name: '中泰化学' },
+      { code: '600409', name: '三友化工' },
+      { code: '600722', name: '金牛化工' },
+    ],
+  },
+
+  // 农产品
+  LH: {
+    prefix: 'LH',
+    name: '生猪',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['生猪养殖', '猪周期', '饲料加工'],
+    relatedStocks: [
+      { code: '002714', name: '牧原股份' },
+      { code: '300498', name: '温氏股份' },
+      { code: '000876', name: '新希望' },
+      { code: '002567', name: '唐人神' },
+    ],
+  },
+  JD: {
+    prefix: 'JD',
+    name: '鸡蛋',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/500千克',
+    relatedSectors: ['家禽养殖', '蛋禽加工', '农牧产业'],
+    relatedStocks: [
+      { code: '002299', name: '圣农发展' },
+      { code: '002477', name: '雏鹰农牧' },
+    ],
+  },
+  AP: {
+    prefix: 'AP',
+    name: '苹果',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['水果冷链', '农业种植', '食品消费'],
+    relatedStocks: [
+      { code: '000713', name: '丰乐种业' },
+      { code: '002582', name: '顺丰控股' },
+    ],
+  },
+  CJ: {
+    prefix: 'CJ',
+    name: '红枣',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['特色农业', '休闲食品', '大健康滋补'],
+    relatedStocks: [
+      { code: '002582', name: '好想你' },
+      { code: '603777', name: '来伊份' },
+    ],
+  },
+  PK: {
+    prefix: 'PK',
+    name: '花生',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['食用油加工', '农副食品', '种植业'],
+    relatedStocks: [
+      { code: '300999', name: '金龙鱼' },
+      { code: '600127', name: '金健米业' },
+    ],
+  },
+  M: {
+    prefix: 'M',
+    name: '豆粕',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['饲料原料', '生猪养殖', '粮油压榨'],
+    relatedStocks: [
+      { code: '002385', name: '大北农' },
+      { code: '000876', name: '新希望' },
+      { code: '300999', name: '金龙鱼' },
+    ],
+  },
+  Y: {
+    prefix: 'Y',
+    name: '豆油',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['食用油脂', '粮油压榨', '厨房调味'],
+    relatedStocks: [
+      { code: '300999', name: '金龙鱼' },
+      { code: '600127', name: '金健米业' },
+      { code: '000061', name: '农产品' },
+    ],
+  },
+  P: {
+    prefix: 'P',
+    name: '棕榈油',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['生物柴油', '日化食品', '油脂进口'],
+    relatedStocks: [
+      { code: '300999', name: '金龙鱼' },
+      { code: '603885', name: '吉祥航空' },
+    ],
+  },
+  C: {
+    prefix: 'C',
+    name: '玉米',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['农业种植', '饲料深加工', '转基因育种'],
+    relatedStocks: [
+      { code: '000998', name: '隆平高科' },
+      { code: '600354', name: '敦煌种业' },
+      { code: '000713', name: '丰乐种业' },
+    ],
+  },
+  CS: {
+    prefix: 'CS',
+    name: '淀粉',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '大商所',
+    unit: '元/吨',
+    relatedSectors: ['玉米深加工', '食品原料', '造纸轻工'],
+    relatedStocks: [
+      { code: '000930', name: '中粮科技' },
+      { code: '600872', name: '中炬高新' },
+    ],
+  },
+  CF: {
+    prefix: 'CF',
+    name: '棉花',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['纺织服装', '棉纺制造', '外贸出口'],
+    relatedStocks: [
+      { code: '002042', name: '华孚时尚' },
+      { code: '600156', name: '华升股份' },
+      { code: '002083', name: '孚日股份' },
+    ],
+  },
+  SR: {
+    prefix: 'SR',
+    name: '白糖',
+    category: '商品期货',
+    subCategory: '农产品',
+    exchange: '郑商所',
+    unit: '元/吨',
+    relatedSectors: ['制糖工业', '食品饮料', '甘蔗甜菜'],
+    relatedStocks: [
+      { code: '000911', name: '南宁糖业' },
+      { code: '600737', name: '中粮糖业' },
+      { code: '600298', name: '安琪酵母' },
+    ],
+  },
+
+  // 金融股指期货 & 国债期货
+  IF: {
+    prefix: 'IF',
+    name: '沪深300期指',
+    category: '股指国债',
+    subCategory: '金融期指',
+    exchange: '中金所',
+    unit: '点',
+    relatedSectors: ['核心资产', '白马权重', '金融地产', '沪深300ETF'],
+    relatedStocks: [
+      { code: '600519', name: '贵州茅台' },
+      { code: '300750', name: '宁德时代' },
+      { code: '601318', name: '中国平安' },
+      { code: '000858', name: '五粮液' },
+      { code: '600036', name: '招商银行' },
+    ],
+  },
+  IC: {
+    prefix: 'IC',
+    name: '中证500期指',
+    category: '股指国债',
+    subCategory: '金融期指',
+    exchange: '中金所',
+    unit: '点',
+    relatedSectors: ['中盘成长', '高端制造', '新材料', '中证500ETF'],
+    relatedStocks: [
+      { code: '002475', name: '立讯精密' },
+      { code: '300124', name: '汇川技术' },
+      { code: '002415', name: '海康威视' },
+      { code: '600487', name: '亨通光电' },
+    ],
+  },
+  IM: {
+    prefix: 'IM',
+    name: '中证1000期指',
+    category: '股指国债',
+    subCategory: '金融期指',
+    exchange: '中金所',
+    unit: '点',
+    relatedSectors: ['小盘题材', '专精特新', '游资短线', '中证1000ETF'],
+    relatedStocks: [
+      { code: '300017', name: '网宿科技' },
+      { code: '300862', name: '蓝盾光电' },
+      { code: '688286', name: '敏芯股份' },
+      { code: '300684', name: '中石科技' },
+    ],
+  },
+  IH: {
+    prefix: 'IH',
+    name: '上证50期指',
+    category: '股指国债',
+    subCategory: '金融期指',
+    exchange: '中金所',
+    unit: '点',
+    relatedSectors: ['超大盘权重', '央国企红利', '银行保险', '上证50ETF'],
+    relatedStocks: [
+      { code: '601398', name: '工商银行' },
+      { code: '601288', name: '农业银行' },
+      { code: '601857', name: '中国石油' },
+      { code: '601088', name: '中国神华' },
+    ],
+  },
+  T: {
+    prefix: 'T',
+    name: '10年期国债期货',
+    category: '股指国债',
+    subCategory: '国债期货',
+    exchange: '中金所',
+    unit: '元',
+    relatedSectors: ['固收理财', '银行间债市', '宏观利率'],
+    relatedStocks: [
+      { code: '601398', name: '工商银行' },
+      { code: '600036', name: '招商银行' },
+      { code: '601166', name: '兴业银行' },
+    ],
+  },
+  TF: {
+    prefix: 'TF',
+    name: '5年期国债期货',
+    category: '股指国债',
+    subCategory: '国债期货',
+    exchange: '中金所',
+    unit: '元',
+    relatedSectors: ['中期国债', '利率避险', '固收基金'],
+    relatedStocks: [
+      { code: '601398', name: '工商银行' },
+      { code: '601288', name: '农业银行' },
+    ],
+  },
+  TS: {
+    prefix: 'TS',
+    name: '2年期国债期货',
+    category: '股指国债',
+    subCategory: '国债期货',
+    exchange: '中金所',
+    unit: '元',
+    relatedSectors: ['短期利率', '流动性晴雨表', '货币市场'],
+    relatedStocks: [
+      { code: '600036', name: '招商银行' },
+      { code: '601398', name: '工商银行' },
+    ],
+  },
+  TL: {
+    prefix: 'TL',
+    name: '30年期国债期货',
+    category: '股指国债',
+    subCategory: '国债期货',
+    exchange: '中金所',
+    unit: '元',
+    relatedSectors: ['超长期特别国债', '险资固收配置', '降息宏观交易'],
+    relatedStocks: [
+      { code: '601318', name: '中国平安' },
+      { code: '601628', name: '中国人寿' },
+      { code: '601398', name: '工商银行' },
+    ],
+  },
+};
+
+/**
+ * Resolves any futures symbol (e.g. SC2609, RB2610, CU2609, SC0, AU0, hf_CL)
+ * into a full FutureItem description
+ */
+export function resolveFutureItem(rawSymbol: string): FutureItem | null {
+  const s = rawSymbol.trim().toUpperCase();
+  if (!s) return null;
+
+  // 1. Direct match in preset database
+  const direct = FUTURES_DATABASE.find(
+    (f) => f.symbol.toUpperCase() === s || f.symbol.replace(/^HF_/, '') === s
+  );
+  if (direct) return direct;
+
+  // 2. Check for Global Futures prefix: hf_CL, hf_GC, etc.
+  if (s.startsWith('HF_') || rawSymbol.toLowerCase().startsWith('hf_')) {
+    const code = s.replace(/^HF_/, '');
+    if (code === 'CL') {
+      return {
+        symbol: 'hf_CL',
+        name: 'WTI原油',
+        category: '外盘期货',
+        subCategory: '全球大宗',
+        exchange: 'NYMEX',
+        unit: '美元/桶',
+        isGlobal: true,
+        relatedSectors: ['国际油价', '原油QDII', '油服工程', '石化产业链'],
+        relatedStocks: [
+          { code: '600938', name: '中国海油' },
+          { code: '601857', name: '中国石油' },
+          { code: '603619', name: '中曼石油' },
+        ],
+      };
+    }
+    if (code === 'GC') {
+      return {
+        symbol: 'hf_GC',
+        name: 'COMEX纽约黄金',
+        category: '外盘期货',
+        subCategory: '全球大宗',
+        exchange: 'COMEX',
+        unit: '美元/盎司',
+        isGlobal: true,
+        relatedSectors: ['国际金价', '黄金避险', '黄金ETF'],
+        relatedStocks: [
+          { code: '600547', name: '山东黄金' },
+          { code: '601899', name: '紫金矿业' },
+          { code: '600489', name: '中金黄金' },
+        ],
+      };
+    }
+  }
+
+  // 3. Dynamic parse standard domestic futures contract (e.g. SC2609, RB2610, CU2609, IF2609)
+  // Match prefix letters and numeric contract suffix
+  const match = s.match(/^([A-Z]{1,3})(\d{0,4})$/);
+  if (match) {
+    const prefix = match[1];
+    const contractNum = match[2]; // e.g. "2609", "0", ""
+    const root = COMMODITY_ROOTS[prefix];
+    if (root) {
+      let displayName = root.name;
+      if (contractNum === '0' || !contractNum) {
+        displayName = `${root.name}连续`;
+      } else {
+        displayName = `${root.name}${contractNum}`;
+      }
+
+      return {
+        symbol: s,
+        name: displayName,
+        category: root.category,
+        subCategory: root.subCategory,
+        exchange: root.exchange,
+        unit: root.unit,
+        isGlobal: false,
+        relatedSectors: root.relatedSectors,
+        relatedStocks: root.relatedStocks,
+      };
+    }
+  }
+
+  return null;
 }
 
 export const FUTURES_DATABASE: FutureItem[] = [
@@ -29,6 +940,20 @@ export const FUTURES_DATABASE: FutureItem[] = [
     ],
   },
   {
+    symbol: 'AU2612',
+    name: '沪金2612',
+    category: '商品期货',
+    subCategory: '贵金属',
+    exchange: '上期所',
+    unit: '元/克',
+    relatedSectors: ['贵金属', '黄金概念', '避险资产'],
+    relatedStocks: [
+      { code: '600547', name: '山东黄金' },
+      { code: '600489', name: '中金黄金' },
+      { code: '601899', name: '紫金矿业' },
+    ],
+  },
+  {
     symbol: 'AG0',
     name: '沪银连续',
     category: '商品期货',
@@ -41,6 +966,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '000975', name: '银泰黄金' },
       { code: '600362', name: '江西铜业' },
       { code: '000960', name: '锡业股份' },
+    ],
+  },
+  {
+    symbol: 'AG2610',
+    name: '沪银2610',
+    category: '商品期货',
+    subCategory: '贵金属',
+    exchange: '上期所',
+    unit: '元/千克',
+    relatedSectors: ['贵金属', '白银概念', '光伏银浆'],
+    relatedStocks: [
+      { code: '000975', name: '银泰黄金' },
+      { code: '600362', name: '江西铜业' },
     ],
   },
 
@@ -58,6 +996,20 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '000932', name: '华菱钢铁' },
       { code: '600569', name: '安阳钢铁' },
       { code: '000709', name: '河钢股份' },
+    ],
+  },
+  {
+    symbol: 'RB2610',
+    name: '螺纹钢2610',
+    category: '商品期货',
+    subCategory: '黑色系',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['钢铁行业', '建筑材料', '基建地产'],
+    relatedStocks: [
+      { code: '600019', name: '宝钢股份' },
+      { code: '000932', name: '华菱钢铁' },
+      { code: '600569', name: '安阳钢铁' },
     ],
   },
   {
@@ -137,6 +1089,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
     ],
   },
   {
+    symbol: 'CU2609',
+    name: '沪铜2609',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '上期所',
+    unit: '元/吨',
+    relatedSectors: ['有色金属', '铜产业', '电网设备'],
+    relatedStocks: [
+      { code: '600362', name: '江西铜业' },
+      { code: '601899', name: '紫金矿业' },
+    ],
+  },
+  {
     symbol: 'AL0',
     name: '沪铝连续',
     category: '商品期货',
@@ -211,6 +1176,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
     ],
   },
   {
+    symbol: 'LC2609',
+    name: '碳酸锂2609',
+    category: '商品期货',
+    subCategory: '有色金属',
+    exchange: '广期所',
+    unit: '元/吨',
+    relatedSectors: ['新能源电池', '锂矿开采', '固态电池'],
+    relatedStocks: [
+      { code: '002466', name: '天齐锂业' },
+      { code: '002460', name: '赣锋锂业' },
+    ],
+  },
+  {
     symbol: 'SI0',
     name: '工业硅连续',
     category: '商品期货',
@@ -223,6 +1201,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '600089', name: '特变电工' },
       { code: '600438', name: '通威股份' },
       { code: '600141', name: '兴发集团' },
+    ],
+  },
+  {
+    symbol: 'EC0',
+    name: '集运欧线连续',
+    category: '商品期货',
+    subCategory: '全球大宗',
+    exchange: '能源中心',
+    unit: '点',
+    relatedSectors: ['航运港口', '集装箱运力', '外贸出口'],
+    relatedStocks: [
+      { code: '601919', name: '中远海控' },
+      { code: '601872', name: '招商轮船' },
     ],
   },
 
@@ -241,6 +1232,33 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '600028', name: '中国石化' },
       { code: '603619', name: '中曼石油' },
       { code: '601808', name: '中海油服' },
+    ],
+  },
+  {
+    symbol: 'SC2609',
+    name: '原油2609',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '能源中心',
+    unit: '元/桶',
+    relatedSectors: ['石油开采', '油服工程', '石化产业链'],
+    relatedStocks: [
+      { code: '600938', name: '中国海油' },
+      { code: '601857', name: '中国石油' },
+      { code: '600028', name: '中国石化' },
+    ],
+  },
+  {
+    symbol: 'SC2610',
+    name: '原油2610',
+    category: '商品期货',
+    subCategory: '能源化工',
+    exchange: '能源中心',
+    unit: '元/桶',
+    relatedSectors: ['石油开采', '油服工程'],
+    relatedStocks: [
+      { code: '600938', name: '中国海油' },
+      { code: '601857', name: '中国石油' },
     ],
   },
   {
@@ -269,7 +1287,6 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '002493', name: '荣盛石化' },
       { code: '000703', name: '恒逸石化' },
       { code: '600346', name: '恒力石化' },
-      { code: '002422', name: '科伦药业' },
     ],
   },
   {
@@ -318,6 +1335,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '601318', name: '中国平安' },
       { code: '000858', name: '五粮液' },
       { code: '600036', name: '招商银行' },
+    ],
+  },
+  {
+    symbol: 'IF2609',
+    name: '沪深300期指2609',
+    category: '股指国债',
+    subCategory: '金融期指',
+    exchange: '中金所',
+    unit: '点',
+    relatedSectors: ['核心资产', '白马权重', '沪深300ETF'],
+    relatedStocks: [
+      { code: '600519', name: '贵州茅台' },
+      { code: '300750', name: '宁德时代' },
     ],
   },
   {
@@ -377,6 +1407,19 @@ export const FUTURES_DATABASE: FutureItem[] = [
       { code: '601398', name: '工商银行' },
       { code: '600036', name: '招商银行' },
       { code: '601166', name: '兴业银行' },
+    ],
+  },
+  {
+    symbol: 'TL0',
+    name: '30年期国债期货',
+    category: '股指国债',
+    subCategory: '国债期货',
+    exchange: '中金所',
+    unit: '元',
+    relatedSectors: ['超长期特别国债', '险资固收配置', '降息宏观交易'],
+    relatedStocks: [
+      { code: '601318', name: '中国平安' },
+      { code: '601628', name: '中国人寿' },
     ],
   },
 

@@ -1,5 +1,5 @@
 import { StockQuote, KlinePoint, KlinePeriod, StockSearchResult } from '../src/types';
-import { FUTURES_DATABASE, FutureItem } from './futuresData';
+import { FUTURES_DATABASE, FutureItem, resolveFutureItem, COMMODITY_ROOTS } from './futuresData';
 
 /**
  * Safely decodes GBK / GB18030 buffer from Sina response
@@ -21,7 +21,7 @@ async function decodeGbk(resp: Response): Promise<string> {
  * Fetches real-time futures quotes from Sina
  */
 export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQuote | null; futureInfo: FutureItem | null }> {
-  const item = FUTURES_DATABASE.find(
+  const item = resolveFutureItem(symbol) || FUTURES_DATABASE.find(
     (f) =>
       f.symbol.toLowerCase() === symbol.toLowerCase() ||
       f.symbol.replace(/^hf_/, '').toLowerCase() === symbol.toLowerCase() ||
@@ -29,8 +29,9 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
   );
 
   const realSymbol = item ? item.symbol : symbol;
-  const isGlobal = realSymbol.startsWith('hf_');
-  const sinaParam = isGlobal ? realSymbol : `nf_${realSymbol}`;
+  const isGlobal = realSymbol.toLowerCase().startsWith('hf_') || (item && item.isGlobal);
+  const cleanSymbol = realSymbol.replace(/^hf_/i, '');
+  const sinaParam = isGlobal ? `hf_${cleanSymbol}` : `nf_${cleanSymbol}`;
 
   try {
     const controller = new AbortController();
@@ -77,8 +78,16 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
           };
 
           return { quote, futureInfo: item || null };
-        } else if (realSymbol.startsWith('IF') || realSymbol.startsWith('IC') || realSymbol.startsWith('IM') || realSymbol.startsWith('IH') || realSymbol.startsWith('T') || realSymbol.startsWith('TF') || realSymbol.startsWith('TS')) {
-          // Financial / Bond Futures: e.g. "4624.000,4700.600,4619.800,4699.000,60002,279775374.000,147300.000,4699.000,0.000,5085.000,4160.600,0.000,0.000,4620.400,4622.800,144619.000,4699.000,8,..."
+        } else if (
+          cleanSymbol.startsWith('IF') ||
+          cleanSymbol.startsWith('IC') ||
+          cleanSymbol.startsWith('IM') ||
+          cleanSymbol.startsWith('IH') ||
+          cleanSymbol.startsWith('T') ||
+          cleanSymbol.startsWith('TF') ||
+          cleanSymbol.startsWith('TS')
+        ) {
+          // Financial / Bond Futures
           const p = raw.split(',');
           const open = parseFloat(p[0]) || 0;
           const high = parseFloat(p[1]) || 0;
@@ -110,7 +119,7 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
 
           return { quote, futureInfo: item || null };
         } else {
-          // Domestic Commodity Futures: e.g. "螺纹钢连续,091106,3015.000,3019.000,2994.000,0.000,3010.000,3011.000,3011.000,0.000,3018.000,564,1379,2043361.000,373643,沪,螺纹钢,2026-08-18,1,..."
+          // Domestic Commodity Futures
           const p = raw.split(',');
           const name = item?.name || p[0] || realSymbol;
           const open = parseFloat(p[2]) || 0;
@@ -118,7 +127,7 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
           const low = parseFloat(p[4]) || 0;
           const price = parseFloat(p[8]) || parseFloat(p[6]) || open;
           const prevSettlement = parseFloat(p[10]) || open || price;
-          const volume = parseFloat(p[14]) || 0; // 持仓/成交
+          const volume = parseFloat(p[14]) || 0;
           const turnover = parseFloat(p[13]) || 0;
           const change = +(price - prevSettlement).toFixed(2);
           const changePercent = prevSettlement > 0 ? +(((price - prevSettlement) / prevSettlement) * 100).toFixed(2) : 0;
@@ -176,29 +185,44 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
  * Fetches real K-lines for futures from Sina Futures K-line API
  */
 export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Promise<KlinePoint[]> {
-  const item = FUTURES_DATABASE.find(
+  const item = resolveFutureItem(symbol) || FUTURES_DATABASE.find(
     (f) =>
       f.symbol.toLowerCase() === symbol.toLowerCase() ||
       f.symbol.replace(/^hf_/, '').toLowerCase() === symbol.toLowerCase() ||
       f.name.includes(symbol)
   );
 
-  const realSymbol = item ? item.symbol.replace(/^hf_/, '') : symbol;
+  const realSymbol = item ? item.symbol : symbol;
+  const isGlobal = realSymbol.toLowerCase().startsWith('hf_') || (item && item.isGlobal);
+  const cleanSymbol = realSymbol.replace(/^hf_/i, '');
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 3500);
+    const timer = setTimeout(() => controller.abort(), 4000);
 
     let klineUrl = '';
-    if (period === 'day') {
-      klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/InnerFuturesNewService.getDailyKLine?symbol=${realSymbol}`;
+    if (isGlobal) {
+      if (period === 'day') {
+        klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/GlobalFuturesService.getGlobalFuturesDailyKLine?symbol=${cleanSymbol}`;
+      } else {
+        let minScale = '5';
+        if (period === '1m' || period === '5m') minScale = '5';
+        else if (period === '15m') minScale = '15';
+        else if (period === '30m') minScale = '30';
+        else if (period === '60m' || period === '90m' || period === '120m') minScale = '60';
+        klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/GlobalFuturesService.getGlobalFuturesMinLine?symbol=${cleanSymbol}&type=${minScale}`;
+      }
     } else {
-      let minScale = '5';
-      if (period === '1m' || period === '5m') minScale = '5';
-      else if (period === '15m') minScale = '15';
-      else if (period === '30m' || period === '90m') minScale = '30';
-      else if (period === '60m' || period === '120m') minScale = '60';
-      klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/InnerFuturesNewService.getMinLine?symbol=${realSymbol}&type=${minScale}`;
+      if (period === 'day') {
+        klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/InnerFuturesNewService.getDailyKLine?symbol=${cleanSymbol}`;
+      } else {
+        let minScale = '5';
+        if (period === '1m' || period === '5m') minScale = '5';
+        else if (period === '15m') minScale = '15';
+        else if (period === '30m') minScale = '30';
+        else if (period === '60m' || period === '90m' || period === '120m') minScale = '60';
+        klineUrl = `https://stock2.finance.sina.com.cn/futures/api/jsonp.php/var%20_kline=/InnerFuturesNewService.getFewMinLine?symbol=${cleanSymbol}&type=${minScale}`;
+      }
     }
 
     const resp = await fetch(klineUrl, {
@@ -209,50 +233,31 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
 
     if (resp.ok) {
       const text = await resp.text();
-      const match = text.match(/\(\s*(\[[\s\S]*\])\s*\)/);
+      const match = text.match(/\(\s*(\[[\s\S]*\])\s*\)/) || text.match(/var\s+_[a-zA-Z0-9_]+\s*=\s*(\[[\s\S]*\]);?/);
       if (match && match[1]) {
         const rawData = JSON.parse(match[1]);
         if (Array.isArray(rawData) && rawData.length > 0) {
-          if (period === 'day') {
-            // format: [{"d":"2026-08-18","o":"3015.000","h":"3019.000","l":"2994.000","c":"3010.000","v":"2043361"}]
-            const list = rawData.slice(-180);
-            return list.map((d: any) => {
-              const open = parseFloat(d.o) || 0;
-              const close = parseFloat(d.c) || 0;
-              const high = parseFloat(d.h) || Math.max(open, close);
-              const low = parseFloat(d.l) || Math.min(open, close);
-              const volume = parseFloat(d.v) || 0;
-              return {
-                time: String(d.d || ''),
-                open,
-                high,
-                low,
-                close,
-                volume,
-                turnover: volume * close,
-              };
-            });
-          } else {
-            // format: [["21:00","3018.000","3014.670","19333","2029573","3016.000","2026-08-18"], ...]
-            const list = rawData.slice(-120);
-            return list.map((item: any) => {
-              const time = item[6] ? `${item[6]} ${item[0]}` : String(item[0] || '');
-              const close = parseFloat(item[1]) || 0;
-              const open = parseFloat(item[5]) || close;
-              const high = Math.max(open, close);
-              const low = Math.min(open, close);
-              const volume = parseFloat(item[3]) || 0;
-              return {
-                time,
-                open,
-                high,
-                low,
-                close,
-                volume,
-                turnover: volume * close,
-              };
-            });
-          }
+          const limit = period === 'day' ? 180 : 120;
+          const list = rawData.slice(-limit);
+
+          return list.map((d: any) => {
+            const time = String(d.d || d.date || d.t || '');
+            const open = parseFloat(d.o || d.open || 0) || 0;
+            const close = parseFloat(d.c || d.close || 0) || open;
+            const high = parseFloat(d.h || d.high || 0) || Math.max(open, close);
+            const low = parseFloat(d.l || d.low || 0) || Math.min(open, close);
+            const volume = parseFloat(d.v || d.volume || 0) || 0;
+
+            return {
+              time,
+              open,
+              high,
+              low,
+              close,
+              volume,
+              turnover: volume * close,
+            };
+          });
         }
       }
     }
@@ -264,12 +269,12 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
 }
 
 /**
- * Searches futures matching query
+ * Searches futures matching query, with support for dynamic symbols (e.g. SC2609)
  */
 export function searchFutures(query: string): StockSearchResult[] {
-  const q = query.trim().toLowerCase();
+  const q = query.trim().toUpperCase();
   if (!q) {
-    return FUTURES_DATABASE.slice(0, 8).map((f) => ({
+    return FUTURES_DATABASE.slice(0, 10).map((f) => ({
       code: f.symbol,
       name: f.name,
       pinyin: f.symbol,
@@ -279,18 +284,61 @@ export function searchFutures(query: string): StockSearchResult[] {
     }));
   }
 
-  return FUTURES_DATABASE.filter(
-    (f) =>
-      f.symbol.toLowerCase().includes(q) ||
-      f.name.toLowerCase().includes(q) ||
-      f.subCategory.toLowerCase().includes(q) ||
-      f.relatedSectors.some((s) => s.toLowerCase().includes(q))
-  ).map((f) => ({
-    code: f.symbol,
-    name: f.name,
-    pinyin: f.symbol,
-    market: f.exchange,
-    fullCode: f.symbol,
-    type: `期货 · ${f.subCategory}`,
-  }));
+  const results: StockSearchResult[] = [];
+  const seenCodes = new Set<string>();
+
+  // 1. Check if user typed a specific dynamic symbol (e.g. SC2609, RB2510)
+  const resolved = resolveFutureItem(q);
+  if (resolved) {
+    results.push({
+      code: resolved.symbol,
+      name: resolved.name,
+      pinyin: resolved.symbol,
+      market: resolved.exchange,
+      fullCode: resolved.symbol,
+      type: `期货 · ${resolved.subCategory}`,
+    });
+    seenCodes.add(resolved.symbol.toUpperCase());
+  }
+
+  // 2. Search preset database
+  for (const f of FUTURES_DATABASE) {
+    if (seenCodes.has(f.symbol.toUpperCase())) continue;
+    if (
+      f.symbol.toUpperCase().includes(q) ||
+      f.name.toUpperCase().includes(q) ||
+      f.subCategory.toUpperCase().includes(q) ||
+      f.relatedSectors.some((s) => s.toUpperCase().includes(q))
+    ) {
+      results.push({
+        code: f.symbol,
+        name: f.name,
+        pinyin: f.symbol,
+        market: f.exchange,
+        fullCode: f.symbol,
+        type: `期货 · ${f.subCategory}`,
+      });
+      seenCodes.add(f.symbol.toUpperCase());
+    }
+  }
+
+  // 3. Search Commodity Roots (e.g., typing 原油 or SC returns main contracts)
+  for (const [key, root] of Object.entries(COMMODITY_ROOTS)) {
+    if (root.name.includes(query) || key.includes(q)) {
+      const continuousSymbol = `${key}0`;
+      if (!seenCodes.has(continuousSymbol)) {
+        results.push({
+          code: continuousSymbol,
+          name: `${root.name}连续`,
+          pinyin: continuousSymbol,
+          market: root.exchange,
+          fullCode: continuousSymbol,
+          type: `期货 · ${root.subCategory}`,
+        });
+        seenCodes.add(continuousSymbol);
+      }
+    }
+  }
+
+  return results.slice(0, 12);
 }
