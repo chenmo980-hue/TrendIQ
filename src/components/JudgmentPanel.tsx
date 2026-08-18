@@ -96,11 +96,20 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
 
   const handleCopyAnalysis = () => {
     if (!aiAnalysis) return;
+    const sectorText = aiAnalysis.sectorSynergy
+      ? `\n\n4. 板块联动与主线共振：\n【${aiAnalysis.sectorSynergy.sectorName} · ${aiAnalysis.sectorSynergy.sectorCategory || '主线'}】` +
+        `${aiAnalysis.sectorSynergy.sectorChangePercent !== undefined ? `(板块 ${aiAnalysis.sectorSynergy.sectorChangePercent > 0 ? '+' : ''}${aiAnalysis.sectorSynergy.sectorChangePercent}%)` : ''}\n` +
+        `相对强弱：${aiAnalysis.sectorSynergy.relativeStrength} | 周期阶段：${aiAnalysis.sectorSynergy.cycleStage} | 板块龙头：${aiAnalysis.sectorSynergy.leaderName || '领军核心'}\n` +
+        `${aiAnalysis.sectorSynergy.analysisText}\n` +
+        `协同策略：${aiAnalysis.sectorSynergy.synergyTips}`
+      : '';
+
     const text = `【${quote?.name} (${quote?.code}) AI 资深技术研判】\n\n` +
       `1. 趋势研判与结构演变：\n${aiAnalysis.trendAssessment}\n\n` +
       `2. 量价关系与资金动能：\n${aiAnalysis.volumePriceAnalysis}\n\n` +
-      `3. 指标多维共振信号：\n${aiAnalysis.indicatorResonance}\n\n` +
-      `4. 关键位置攻防与策略：\n${aiAnalysis.keyLevels}\n\n` +
+      `3. 指标多维共振信号：\n${aiAnalysis.indicatorResonance}` +
+      sectorText +
+      `\n\n5. 关键位置攻防与策略：\n${aiAnalysis.keyLevels}\n\n` +
       `风险提示：\n${aiAnalysis.riskNotice}`;
 
     navigator.clipboard.writeText(text);
@@ -242,10 +251,49 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.indicatorResonance}</p>
             </div>
 
+            {aiAnalysis.sectorSynergy && (
+              <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <div className="font-bold text-indigo-400 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>4. 板块联动与主线共振</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#1a2333] text-indigo-300 border border-indigo-500/30">
+                      {aiAnalysis.sectorSynergy.sectorName}
+                    </span>
+                    {aiAnalysis.sectorSynergy.sectorChangePercent !== undefined && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${aiAnalysis.sectorSynergy.sectorChangePercent >= 0 ? 'bg-rose-950/40 text-rose-400 border border-rose-800/40' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40'}`}>
+                        板块 {aiAnalysis.sectorSynergy.sectorChangePercent > 0 ? '+' : ''}{aiAnalysis.sectorSynergy.sectorChangePercent}%
+                      </span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-950/40 text-amber-300 border border-amber-800/40">
+                      {aiAnalysis.sectorSynergy.relativeStrength}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-800/80 text-slate-300 border border-slate-700">
+                      {aiAnalysis.sectorSynergy.cycleStage}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-slate-300 leading-relaxed text-[11px]">
+                  {aiAnalysis.sectorSynergy.analysisText}
+                </p>
+
+                {aiAnalysis.sectorSynergy.synergyTips && (
+                  <div className="p-2 rounded bg-indigo-950/25 border border-indigo-900/40 text-[10px] text-indigo-200 flex items-start gap-1.5">
+                    <span className="font-bold text-indigo-400 shrink-0">💡 协同战法:</span>
+                    <span className="leading-relaxed">{aiAnalysis.sectorSynergy.synergyTips}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-1">
               <div className="font-bold text-emerald-400 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>4. 关键位置攻防与策略</span>
+                <span>5. 关键位置攻防与策略</span>
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.keyLevels}</p>
             </div>

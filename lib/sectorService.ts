@@ -198,6 +198,73 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
 }
 
 /**
+ * Resolves or maps any stock / asset to its most matching Sector & related leader info
+ */
+export function findSectorForStockOrAsset(codeOrSymbol: string, nameHint?: string): SectorItem | null {
+  const clean = codeOrSymbol.trim().toLowerCase();
+  const name = (nameHint || '').toLowerCase();
+
+  // 1. Direct constituent match in SECTOR_DATABASE
+  const direct = SECTOR_DATABASE.find(
+    (s) =>
+      s.code.toLowerCase() === clean ||
+      s.bkCode.toLowerCase() === clean ||
+      s.leadStockCode === clean ||
+      s.constituents.some((c) => c.code.toLowerCase() === clean || clean.includes(c.code.toLowerCase()))
+  );
+  if (direct) return direct;
+
+  // 2. Match by sector name keywords or stock name keywords
+  const keywordMatch = SECTOR_DATABASE.find((s) => {
+    if (s.name.toLowerCase().includes(clean) || clean.includes(s.name.toLowerCase())) return true;
+    if (name) {
+      if (name.includes('原油') || name.includes('油气') || name.includes('石油') || name.includes('石化') || clean.startsWith('sc') || clean.startsWith('cl')) {
+        return s.code === 'BK_PETROCHEMICAL';
+      }
+      if (name.includes('黄金') || name.includes('贵金属') || name.includes('金矿') || name.includes('白银') || clean.startsWith('au') || clean.startsWith('ag')) {
+        return s.code === 'BK_GOLD';
+      }
+      if (name.includes('低空') || name.includes('飞行') || name.includes('无人机') || (name.includes('航') && name.includes('海直'))) {
+        return s.code === 'BK_DKJJ';
+      }
+      if (name.includes('芯') || name.includes('半导体') || name.includes('集成电路') || name.includes('微') || name.includes('光刻')) {
+        return s.code === 'BK_SEMICONDUCTOR';
+      }
+      if (name.includes('算力') || name.includes('通信') || name.includes('光模块') || name.includes('cpo') || name.includes('服务器')) {
+        return s.code === 'BK_AI_POWER';
+      }
+      if (name.includes('电池') || name.includes('锂') || name.includes('储能') || clean.startsWith('lc')) {
+        return s.code === 'BK_BATTERY' || s.code === 'BK_ENERGY_STORAGE';
+      }
+      if (name.includes('机器人') || name.includes('减速器') || name.includes('丝杠') || name.includes('伺服')) {
+        return s.code === 'BK_ROBOT';
+      }
+      if (name.includes('车') || name.includes('汽') || name.includes('智驾') || name.includes('底盘')) {
+        return s.code === 'BK_AUTO';
+      }
+      if (name.includes('券') || name.includes('证券') || name.includes('财富') || name.includes('期货')) {
+        return s.code === 'BK_SECURITIES';
+      }
+      if (name.includes('药') || name.includes('医') || name.includes('生物') || name.includes('康')) {
+        return s.code === 'BK_MEDICAL';
+      }
+      if (name.includes('酒') || name.includes('茅台') || name.includes('汾酒') || name.includes('五粮')) {
+        return s.code === 'BK_LIQUOR';
+      }
+      if (name.includes('航天') || name.includes('卫星') || name.includes('星图') || name.includes('空间')) {
+        return s.code === 'BK_AEROSPACE';
+      }
+      if (name.includes('银行') || name.includes('电力') || name.includes('神华') || name.includes('红利')) {
+        return s.code === 'BK_BANK_DIVIDEND';
+      }
+    }
+    return false;
+  });
+
+  return keywordMatch || SECTOR_DATABASE[0];
+}
+
+/**
  * Fetches authentic K-line for a sector synthesized from its core leaders with Tencent QFQ data
  */
 export async function fetchSectorKline(sectorCode: string, period: KlinePeriod): Promise<KlinePoint[]> {

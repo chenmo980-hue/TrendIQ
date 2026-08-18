@@ -176,14 +176,30 @@ export interface MarketIndexItem {
   turnover: number;
 }
 
+export interface SectorSynergyInfo {
+  sectorName: string;
+  sectorCode?: string;
+  sectorCategory?: string;
+  sectorChangePercent?: number;
+  leaderName?: string;
+  leaderChangePercent?: number;
+  relativeStrength: '超额强势领涨' | '主升共振' | '滞涨分化' | '逆势独立' | '跟随调整' | string;
+  cycleStage: '启动蓄势期' | '主升加速期' | '高位分歧期' | '退潮整理期' | string;
+  analysisText: string;
+  synergyTips: string;
+}
+
 export interface AIAnalysisResponse {
   trendAssessment: string;
   volumePriceAnalysis: string;
   indicatorResonance: string;
+  sectorSynergy?: SectorSynergyInfo;
   keyLevels: string;
   riskNotice: string;
   confidenceScore: number;
   generatedAt: string;
+  source?: string;
+  notice?: string;
 }
 
 export interface VisionPattern {
