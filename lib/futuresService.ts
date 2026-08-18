@@ -245,10 +245,10 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
         }
 
         if (Array.isArray(rawData) && rawData.length > 0) {
-          const limit = period === 'day' ? 180 : 120;
+          const limit = period === 'day' ? 800 : 240;
           const list = rawData.slice(-limit);
 
-          return list.map((d: any) => {
+          const result: KlinePoint[] = list.map((d: any) => {
             if (Array.isArray(d)) {
               // Global / Array min format: [date/time, open, high/prev, low, close, volume, ...] or with full time at the end
               const time = String(d[d.length - 1] && String(d[d.length - 1]).includes(':') ? d[d.length - 1] : d[0] || '');
@@ -286,6 +286,41 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
               turnover: volume * close,
             };
           });
+
+          // For daily K-line, append or merge today's real-time live trading candle
+          if (period === 'day' && result.length > 0) {
+            try {
+              const { quote } = await fetchFuturesQuote(symbol);
+              if (quote && quote.price > 0 && quote.open > 0) {
+                const now = new Date();
+                const todayStr = now.toISOString().split('T')[0];
+                const lastItem = result[result.length - 1];
+
+                if (lastItem.time === todayStr) {
+                  lastItem.open = quote.open;
+                  lastItem.high = Math.max(lastItem.high, quote.high, quote.price);
+                  lastItem.low = Math.min(lastItem.low, quote.low, quote.price);
+                  lastItem.close = quote.price;
+                  lastItem.volume = quote.volume || lastItem.volume;
+                  lastItem.turnover = quote.turnover || lastItem.turnover;
+                } else if (lastItem.time < todayStr) {
+                  result.push({
+                    time: todayStr,
+                    open: quote.open,
+                    high: quote.high || Math.max(quote.open, quote.price),
+                    low: quote.low || Math.min(quote.open, quote.price),
+                    close: quote.price,
+                    volume: quote.volume,
+                    turnover: quote.turnover || quote.volume * quote.price,
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore quote merge error if fails
+            }
+          }
+
+          return result;
         }
       }
     }
