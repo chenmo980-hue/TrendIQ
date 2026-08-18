@@ -166,7 +166,7 @@ async function startServer() {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 2000);
         const resp = await fetch(
-          `https://suggest3.sinajs.cn/suggest/type=11,12,13,14,15&key=${encodeURIComponent(query)}`,
+          `https://suggest3.sinajs.cn/suggest/key=${encodeURIComponent(query)}`,
           { signal: controller.signal }
         );
         clearTimeout(timer);
@@ -178,19 +178,28 @@ async function startServer() {
             for (const item of items) {
               const parts = item.split(',');
               if (parts.length >= 5) {
-                const fullCode = parts[3]; // e.g. sh600519
-                const code = parts[2];
+                const rawFullCode = parts[3]; // e.g. sh600519, of161129, sz159915
+                const rawCode = parts[2];
                 const rawName = parts[4];
+                const norm = normalizeStockCode(rawFullCode || rawCode);
+                const code = norm.code;
+                const fullCode = norm.fullCode;
                 const matchedPreset = PRESET_DATABASE.find((p) => p.code === code);
                 const name = cleanChineseText(rawName, matchedPreset?.name || code);
-                const market = fullCode.startsWith('sh') ? 'sh' : fullCode.startsWith('sz') ? 'sz' : 'bj';
+                
+                let assetType = 'A股';
+                if (norm.isIndex) assetType = '指数';
+                else if (/^(16|501)/.test(code)) assetType = 'LOF';
+                else if (/^(15|51|56|58)/.test(code)) assetType = 'ETF';
+                else if (/^(11|12)/.test(code)) assetType = '可转债';
+
                 onlineResults.push({
                   code,
                   name,
                   pinyin: parts[1] || code,
-                  market,
+                  market: norm.market,
                   fullCode,
-                  type: parts[0] === '11' ? 'A股' : '指数',
+                  type: assetType,
                 });
               }
             }
@@ -209,13 +218,19 @@ async function startServer() {
 
       if (map.size === 0 && /^\d+$/.test(query)) {
         const norm = normalizeStockCode(query);
+        let assetType = 'A股';
+        if (norm.isIndex) assetType = '指数';
+        else if (/^(16|501)/.test(norm.code)) assetType = 'LOF';
+        else if (/^(15|51|56|58)/.test(norm.code)) assetType = 'ETF';
+        else if (/^(11|12)/.test(norm.code)) assetType = '可转债';
+
         map.set(norm.code, {
           code: norm.code,
           name: norm.nameHint || `标的 ${norm.code}`,
           pinyin: norm.code,
           market: norm.market,
           fullCode: norm.fullCode,
-          type: norm.isIndex ? '指数' : 'A股',
+          type: assetType,
         });
       }
 

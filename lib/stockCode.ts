@@ -115,29 +115,51 @@ export function normalizeStockCode(input: string): NormalizedStock {
     };
   }
   
-  // Handle prefixes like sh, sz, bj
+  // Handle prefixes like sh, sz, bj, of
   let market: 'sh' | 'sz' | 'bj' = 'sh';
   let rawCode = clean;
 
-  if (clean.startsWith('sh') || clean.startsWith('sz') || clean.startsWith('bj')) {
-    market = clean.slice(0, 2) as 'sh' | 'sz' | 'bj';
+  if (clean.startsWith('of')) {
     rawCode = clean.slice(2);
-  } else if (clean.endsWith('.sh')) {
+  }
+
+  if (rawCode.startsWith('sh') || rawCode.startsWith('sz') || rawCode.startsWith('bj')) {
+    market = rawCode.slice(0, 2) as 'sh' | 'sz' | 'bj';
+    rawCode = rawCode.slice(2);
+  } else if (rawCode.endsWith('.sh')) {
     market = 'sh';
-    rawCode = clean.slice(0, -3);
-  } else if (clean.endsWith('.sz')) {
+    rawCode = rawCode.slice(0, -3);
+  } else if (rawCode.endsWith('.sz')) {
     market = 'sz';
-    rawCode = clean.slice(0, -3);
-  } else if (clean.endsWith('.bj')) {
+    rawCode = rawCode.slice(0, -3);
+  } else if (rawCode.endsWith('.bj')) {
     market = 'bj';
-    rawCode = clean.slice(0, -3);
+    rawCode = rawCode.slice(0, -3);
   } else {
-    // Determine market based on numeric prefixes
-    if (/^(600|601|603|605|688|689)/.test(rawCode)) {
+    // 1. Shanghai Market Rules:
+    // - 600xxx, 601xxx, 603xxx, 605xxx: Shanghai Main A
+    // - 688xxx, 689xxx: Shanghai STAR (科创板)
+    // - 50xxxx, 51xxxx, 52xxxx, 56xxxx, 58xxxx: Shanghai ETF / LOF / Funds (e.g. 510300, 501018, 588000)
+    // - 11xxxx: Shanghai Convertible Bonds (e.g. 113050)
+    // - 900xxx: Shanghai B-shares
+    if (/^(600|601|603|605|688|689|50|51|52|56|58|110|111|113|118|900)/.test(rawCode)) {
       market = 'sh';
-    } else if (/^(000|001|002|003|300|301)/.test(rawCode)) {
+    } 
+    // 2. Shenzhen Market Rules:
+    // - 000xxx, 001xxx, 002xxx, 003xxx: Shenzhen Main A / SME
+    // - 300xxx, 301xxx: Shenzhen ChiNext (创业板)
+    // - 15xxxx: Shenzhen ETF (e.g. 159915)
+    // - 16xxxx: Shenzhen LOF (e.g. 161129, 162411, 161725, 163402, 160416)
+    // - 18xxxx: Shenzhen Funds / REITs (e.g. 184801)
+    // - 12xxxx: Shenzhen Convertible Bonds (e.g. 123xxx, 127xxx, 128xxx)
+    // - 200xxx: Shenzhen B-shares
+    // - 399xxx: Shenzhen Indices (e.g. 399001, 399006)
+    else if (/^(000|001|002|003|300|301|15|16|18|123|127|128|200|399)/.test(rawCode)) {
       market = 'sz';
-    } else if (/^(43|83|87|920)/.test(rawCode)) {
+    } 
+    // 3. Beijing Stock Exchange Rules:
+    // - 43xxxx, 83xxxx, 87xxxx, 920xxx: Beijing Stock Exchange
+    else if (/^(43|83|87|920)/.test(rawCode)) {
       market = 'bj';
     } else if (rawCode === '000001' && (clean.includes('sh') || clean.includes('指') || clean.includes('上证'))) {
       market = 'sh';
@@ -169,9 +191,14 @@ export function normalizeStockCode(input: string): NormalizedStock {
   };
 }
 
-export function formatPrice(val?: number, decimals = 2): string {
+export function formatPrice(val?: number, decimals?: number): string {
   if (val === undefined || val === null || isNaN(val)) return '--';
-  return val.toFixed(decimals);
+  if (decimals !== undefined) return val.toFixed(decimals);
+  // Auto-format for funds, LOFs, ETFs and penny prices with 3 decimal precision (e.g. 1.789, 0.852)
+  if (Math.abs(val) < 20 && Math.abs(val) > 0 && Number((val * 1000).toFixed(1)) % 10 !== 0) {
+    return val.toFixed(3);
+  }
+  return val.toFixed(2);
 }
 
 export function formatVolume(volume?: number): string {
