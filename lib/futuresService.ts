@@ -233,14 +233,42 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
 
     if (resp.ok) {
       const text = await resp.text();
-      const match = text.match(/\(\s*(\[[\s\S]*\])\s*\)/) || text.match(/var\s+_[a-zA-Z0-9_]+\s*=\s*(\[[\s\S]*\]);?/);
+      // Match JSON array or object inside JSONP
+      const match = text.match(/var\s+_[a-zA-Z0-9_]+\s*=\s*\(?\s*(\{[\s\S]*\}|\[[\s\S]*\])\s*\)?/) || text.match(/\(\s*(\{[\s\S]*\}|\[[\s\S]*\])\s*\)/);
       if (match && match[1]) {
-        const rawData = JSON.parse(match[1]);
+        let rawData = JSON.parse(match[1]);
+        if (!Array.isArray(rawData) && typeof rawData === 'object' && rawData !== null) {
+          const keys = Object.keys(rawData);
+          if (keys.length > 0 && Array.isArray(rawData[keys[0]])) {
+            rawData = rawData[keys[0]];
+          }
+        }
+
         if (Array.isArray(rawData) && rawData.length > 0) {
           const limit = period === 'day' ? 180 : 120;
           const list = rawData.slice(-limit);
 
           return list.map((d: any) => {
+            if (Array.isArray(d)) {
+              // Global / Array min format: [date/time, open, high/prev, low, close, volume, ...] or with full time at the end
+              const time = String(d[d.length - 1] && String(d[d.length - 1]).includes(':') ? d[d.length - 1] : d[0] || '');
+              const open = parseFloat(d[1]) || 0;
+              const close = parseFloat(d[4] !== undefined ? d[4] : d[1]) || open;
+              const high = parseFloat(d[2] !== undefined ? d[2] : Math.max(open, close)) || Math.max(open, close);
+              const low = parseFloat(d[3] !== undefined ? d[3] : Math.min(open, close)) || Math.min(open, close);
+              const volume = parseFloat(d[5]) || 0;
+
+              return {
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                turnover: volume * close,
+              };
+            }
+
             const time = String(d.d || d.date || d.t || '');
             const open = parseFloat(d.o || d.open || 0) || 0;
             const close = parseFloat(d.c || d.close || 0) || open;

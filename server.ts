@@ -12,7 +12,7 @@ import { getRealTimeLimitUpBoardData } from './lib/realtimeLimitUpService';
 import { fetchStockDragonTigerDetail } from './lib/stockDragonTigerService';
 import { fetchFuturesQuote, fetchFuturesKline, searchFutures } from './lib/futuresService';
 import { fetchSectorDetail, fetchSectorKline, searchSectors } from './lib/sectorService';
-import { FUTURES_DATABASE } from './lib/futuresData';
+import { FUTURES_DATABASE, resolveFutureItem } from './lib/futuresData';
 import { SECTOR_DATABASE } from './lib/sectorCatalog';
 import type { KlinePoint, StockQuote, StockSearchResult, KlinePeriod } from './src/types';
 
@@ -132,10 +132,24 @@ async function startServer() {
     const qLower = query.toLowerCase();
 
     // 2. Search Sectors
-    const sectorResults = (category === 'all' || category === 'sector') ? searchSectors(query) : [];
+    let sectorResults = (category === 'all' || category === 'sector') ? searchSectors(query) : [];
+    // If specific category is not sector but query explicitly matches sector name or code, include it
+    if (sectorResults.length === 0 && (category === 'stock' || category === 'futures')) {
+      const explicitSector = searchSectors(query);
+      if (explicitSector.length > 0) {
+        sectorResults = explicitSector.slice(0, 3);
+      }
+    }
 
     // 3. Search Futures
-    const futuresResults = (category === 'all' || category === 'futures') ? searchFutures(query) : [];
+    let futuresResults = (category === 'all' || category === 'futures') ? searchFutures(query) : [];
+    // If specific category is not futures but query explicitly matches futures symbol/root, include it
+    if (futuresResults.length === 0 && (category === 'stock' || category === 'sector')) {
+      const explicitFutures = searchFutures(query);
+      if (explicitFutures.length > 0) {
+        futuresResults = explicitFutures.slice(0, 3);
+      }
+    }
 
     // 4. Search A-Share Stocks & Indices
     let stockResults: StockSearchResult[] = [];
@@ -281,11 +295,12 @@ async function startServer() {
     const rawCode = String(req.query.code || '600519').trim();
     const period = String(req.query.period || 'day') as KlinePeriod; // day, 1m, 5m, 15m, 30m, 60m, 90m, 120m
 
-    // A. Check if the target is a Futures Contract (e.g. AU0, AG0, RB0, CU0, SC0, IF0, hf_CL, etc.)
+    // A. Check if the target is a Futures Contract (e.g. AU0, AG0, RB0, CU0, SC0, SC2609, IF0, hf_CL, etc.)
     const isFuture =
+      resolveFutureItem(rawCode) !== null ||
       FUTURES_DATABASE.some((f) => f.symbol.toLowerCase() === rawCode.toLowerCase()) ||
       rawCode.startsWith('hf_') ||
-      /^(RB|HC|I|J|JM|CU|AL|ZN|NI|SN|AU|AG|SC|MA|TA|SA|FG|LC|SI|IF|IC|IM|IH|T|TF|TS)\d*$/i.test(rawCode);
+      /^(RB|HC|I|J|JM|CU|AL|ZN|NI|SN|AU|AG|SC|MA|TA|SA|FG|LC|SI|IF|IC|IM|IH|T|TF|TS|AP|CJ|CF|SR|OI|RM|PK|UR|PG|EG|EB|SS|V|PP|L|BU|FU|LU|NR|BC|EC)\d*$/i.test(rawCode);
 
     if (isFuture) {
       const { quote, futureInfo } = await fetchFuturesQuote(rawCode);
