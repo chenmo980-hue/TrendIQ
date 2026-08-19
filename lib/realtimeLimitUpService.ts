@@ -160,6 +160,100 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
 /**
  * Fetch newly discovered limit-up stocks not in master list
  */
+/**
+ * Fetch the real-time limit-up pool from Eastmoney's official 涨停池 API.
+ * This is the authoritative source: it carries the true consecutive-board
+ * count (lbc), broken-board count (zbc), industry (hybk), first/last seal
+ * times and seal amount — unlike the generic quote list which only has
+ * changePercent and always reports first-board.
+ */
+async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    const bj = getBeijingDate();
+    const dateStr =
+      String(bj.getFullYear()) +
+      String(bj.getMonth() + 1).padStart(2, '0') +
+      String(bj.getDate()).padStart(2, '0');
+
+    const url =
+      'https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=120&sort=fbt:asc&date=' +
+      dateStr;
+
+    const resp = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Referer: 'https://quote.eastmoney.com/ztb/',
+      },
+    });
+    clearTimeout(timer);
+
+    if (!resp.ok) return [];
+
+    const json = await resp.json();
+    const pool = json?.data?.pool || [];
+    if (!Array.isArray(pool) || pool.length === 0) return [];
+
+    const result: LimitUpStock[] = [];
+    for (const item of pool) {
+      const code = String(item.c || '').padStart(6, '0');
+      if (!code) continue;
+
+      const name = String(item.n || `标的${code}`);
+      const price = parseFloat(item.p) || 0;
+      const changePercent = parseFloat(item.zdp) || 0;
+      const boards = Math.max(1, parseInt(item.lbc, 10) || 1);
+      const isBroken = parseInt(item.zbc, 10) > 0;
+      const openCount = parseInt(item.zbc, 10) || 0;
+      const sealAmount = Math.round(parseFloat(item.fund) || 0);
+      const turnover = Math.round(parseFloat(item.amount) || 0);
+      const turnoverRate = parseFloat(item.hs) || 0;
+      const marketCap = parseFloat(item.ltsz) || 0;
+      const sector = String(item.hybk || '主线热点').replace(/[ⅠⅡⅢ]/g, '');
+      const firstTime = String(item.fbt || '').padStart(4, '0');
+      const lastTime = String(item.lbt || '').padStart(4, '0');
+      const firstTimeStr = `${firstTime.slice(0, 2)}:${firstTime.slice(2)}:00`;
+      const lastTimeStr = `${lastTime.slice(0, 2)}:${lastTime.slice(2)}:00`;
+
+      const norm = normalizeStockCode(code);
+
+      result.push({
+        code,
+        name,
+        market: norm.market,
+        fullCode: norm.fullCode,
+        price,
+        change: +(price - price / (1 + changePercent / 100)).toFixed(2),
+        changePercent: +changePercent.toFixed(2),
+        consecutiveBoards: boards,
+        boardText: boards >= 2 ? `${boards}连板` : '首板',
+        sector,
+        subConcepts: [sector, `${boards >= 2 ? boards + '连板' : '首板'}涨停`, '今日涨停'],
+        firstTime: firstTimeStr,
+        lastTime: lastTimeStr,
+        sealAmount,
+        sealRatio: 1.0,
+        turnover,
+        turnoverRate,
+        marketCap,
+        reason: `${sector}板块活跃，${name}${boards >= 2 ? '连续' + boards + '个涨停' : '今日涨停'}，封单${(sealAmount / 1e8).toFixed(2)}亿元。`,
+        dragonTigerType: '待核实',
+        netBuyAmount: 0,
+        isBroken,
+        openCount,
+      });
+    }
+
+    return result;
+  } catch {
+    return [];
+  }
+}
+
+// Keep a dynamic market scan as an extra fallback (no real board counts).
 async function fetchDynamicMarketLimitUpPool(): Promise<LimitUpStock[]> {
   try {
     const controller = new AbortController();
@@ -248,65 +342,73 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
     return cachedBoardData;
   }
 
-  // 1. Start with master stocks as structural backbone (never lose consecutiveBoards, sector, dragonTiger meta)
-  let masterEnriched = MASTER_LIMIT_UP_STOCKS.map((s) => ({ ...s }));
-  try {
-    masterEnriched = await enrichStocksWithLiveQuotes(masterEnriched);
-  } catch {
-    // ignore quote enrichment failure, keep master data intact
-  }
+  // 1. Live limit-up pool is the authoritative source (real consecutive-board
+  //    counts from Eastmoney's official 涨停池 API). Static master data is used
+  //    ONLY as a fallback when the live feed fails — it frequently contains
+  //    stale/out-of-date entries (suspended stocks, wrong board counts).
+  let finalStocks: LimitUpStock[] = [];
+  let usingFallback = false;
 
-  // 2. Optionally supplement with dynamic market scan for newly discovered limit-up stocks
-  let liveStocks: LimitUpStock[] | null = null;
   try {
-    liveStocks = await fetchDynamicMarketLimitUpPool();
+    const livePool = await fetchLiveLimitUpPool();
+    if (livePool.length > 0) {
+      // Enrich the live pool with fresh quotes (they already carry quotes, but
+      // this guarantees consistent fields).
+      finalStocks = await enrichStocksWithLiveQuotes(livePool);
+    }
   } catch {
     // ignore
   }
 
-  let finalStocks = [...masterEnriched];
-  if (liveStocks && liveStocks.length > 0) {
-    const masterCodes = new Set(masterEnriched.map((s) => s.code));
-    // Only add dynamic stocks that are NOT already in master list
-    const supplementalStocks = liveStocks.filter((s) => !masterCodes.has(s.code));
-    if (supplementalStocks.length > 0) {
-      finalStocks = [...masterEnriched, ...supplementalStocks];
+  if (finalStocks.length === 0) {
+    // 2. Fallback #1: dynamic market scan (no real board counts, everything 首板)
+    try {
+      finalStocks = await fetchDynamicMarketLimitUpPool();
+    } catch {
+      // ignore
     }
+  }
+
+  if (finalStocks.length === 0) {
+    // 3. Fallback #2: static master data (structural backbone with board counts,
+    //    may be stale but better than nothing).
+    usingFallback = true;
+    let masterEnriched = MASTER_LIMIT_UP_STOCKS.map((s) => ({ ...s }));
+    try {
+      masterEnriched = await enrichStocksWithLiveQuotes(masterEnriched);
+    } catch {
+      // ignore quote enrichment failure, keep master data intact
+    }
+    finalStocks = masterEnriched;
   }
 
   // Sort by consecutive boards descending, then seal amount descending
   finalStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
 
-  // Build sector groups: use MASTER_SECTOR_GROUPS as backbone, enrich with live stock data
-  const stockCodeMap = new Map<string, LimitUpStock>();
+  // Build sector groups dynamically from the final stock list (live data).
+  const sectorMap = new Map<string, LimitUpStock[]>();
   for (const s of finalStocks) {
-    stockCodeMap.set(s.code, s);
+    const key = s.sector || '主线热点';
+    if (!sectorMap.has(key)) sectorMap.set(key, []);
+    sectorMap.get(key)!.push(s);
   }
 
   const updatedSectors: SectorLimitUpGroup[] = [];
+  for (const [sectorName, secStocks] of sectorMap) {
+    secStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
+    const leader = secStocks[0];
+    const avgChange = +(secStocks.reduce((sum, s) => sum + s.changePercent, 0) / secStocks.length).toFixed(2);
+    const totalTurnover = secStocks.reduce((sum, s) => sum + (s.turnover || 0), 0);
 
-  // 1. Update master sector groups with live stock data
-  for (const masterSec of MASTER_SECTOR_GROUPS) {
-    const liveSecStocks: LimitUpStock[] = [];
-    for (const masterStock of masterSec.stocks) {
-      const live = stockCodeMap.get(masterStock.code);
-      if (live) {
-        liveSecStocks.push(live);
-      } else {
-        liveSecStocks.push(masterStock);
-      }
-    }
-
-    if (liveSecStocks.length === 0) continue;
-
-    liveSecStocks.sort((a, b) => b.consecutiveBoards - a.consecutiveBoards || b.sealAmount - a.sealAmount);
-    const leader = liveSecStocks[0];
-    const avgChange = +(liveSecStocks.reduce((sum, s) => sum + s.changePercent, 0) / liveSecStocks.length).toFixed(2);
+    // Match against a master sector group to inherit its catalyst text if possible
+    const masterSec = MASTER_SECTOR_GROUPS.find((m) => m.sectorName === sectorName || m.sectorName.includes(sectorName));
 
     updatedSectors.push({
-      ...masterSec,
+      sectorId: masterSec?.sectorId,
+      sectorName,
       sectorChangePercent: avgChange,
-      limitUpCount: liveSecStocks.length,
+      limitUpCount: secStocks.length,
+      totalTurnover,
       leaderStock: {
         code: leader.code,
         name: leader.name,
@@ -314,12 +416,16 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
         consecutiveBoards: leader.consecutiveBoards,
         boardText: leader.boardText,
       },
-      stocks: liveSecStocks,
+      stocks: secStocks,
+      catalyst: masterSec?.catalyst,
     });
   }
 
-  // 2. 只使用 MASTER_SECTOR_GROUPS 作为板块骨干，不为动态补充股票创建新板块
-  // 动态补充股票已包含在 finalStocks 中，但不参与板块分组展示
+  // Sort sectors by leader board count descending
+  updatedSectors.sort(
+    (a, b) =>
+      b.leaderStock.consecutiveBoards - a.leaderStock.consecutiveBoards || b.limitUpCount - a.limitUpCount
+  );
 
   // Build dragon tiger seats: prefer live data from the latest trade date,
   // falling back to the static master seats when the live fetch fails.
@@ -334,17 +440,24 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
     // ignore, keep static master data as fallback
   }
 
-  // Calculate summary from MASTER stocks only (not dynamic supplementary stocks)
+  // Calculate summary from the final stock list (live data preferred).
   const staticSummary = getLimitUpSummary();
-  const masterStocksOnly = finalStocks.filter((s) => MASTER_LIMIT_UP_STOCKS.some((m) => m.code === s.code));
-  const limitUpCount = masterStocksOnly.filter((s) => s.changePercent >= 9.5).length || staticSummary.totalLimitUp;
-  const brokenCount = masterStocksOnly.filter((s) => s.isBroken).length || staticSummary.brokenCount;
+  const limitUpCount = finalStocks.filter((s) => s.changePercent >= 9.5).length || staticSummary.totalLimitUp;
+  const brokenCount = finalStocks.filter((s) => s.isBroken).length || staticSummary.brokenCount;
   const totalCount = limitUpCount + brokenCount;
   const sealSuccessRate = totalCount > 0 ? +((limitUpCount / totalCount) * 100).toFixed(1) : staticSummary.sealSuccessRate;
-  const maxBoards = Math.max(...masterStocksOnly.map((s) => s.consecutiveBoards), 1);
+  const maxBoards = Math.max(...finalStocks.map((s) => s.consecutiveBoards), 1);
   const sentimentScore = Math.min(95, Math.max(60, Math.round(sealSuccessRate * 0.7 + maxBoards * 4)));
 
-  const topDragon = masterStocksOnly.find((s) => s.consecutiveBoards === maxBoards) || masterStocksOnly[0];
+  // Compute ladder distribution from the real stock list (per consecutive board count)
+  const liveLadder: Record<number, number> = {};
+  for (const s of finalStocks) {
+    const b = Math.max(1, s.consecutiveBoards);
+    liveLadder[b] = (liveLadder[b] || 0) + 1;
+  }
+  const ladderDistribution = Object.keys(liveLadder).length > 0 ? liveLadder : staticSummary.ladderDistribution;
+
+  const topDragon = finalStocks.find((s) => s.consecutiveBoards === maxBoards) || finalStocks[0];
 
   const summary: LimitUpLadderSummary = {
     date: formatBeijingDateStr(getBeijingDate()),
@@ -352,7 +465,7 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
     totalLimitDown: 2,
     brokenCount,
     sealSuccessRate,
-    ladderDistribution: staticSummary.ladderDistribution,
+    ladderDistribution,
     yesterdayLimitUpReturn: staticSummary.yesterdayLimitUpReturn,
     marketSentimentScore: sentimentScore,
     sentimentPhase:
@@ -361,7 +474,7 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
         : maxBoards >= 3
         ? '中位晋级加速期（题材多点开花）'
         : '首板试错与混沌期',
-    topDragonStock: topDragon ? `${topDragon.name} (${topDragon.boardText})` : '蓝盾光电 (5连板)',
+    topDragonStock: topDragon ? `${topDragon.name} (${topDragon.boardText})` : usingFallback ? '暂无数据' : '暂无数据',
     maxConsecutiveBoards: maxBoards,
   };
 
