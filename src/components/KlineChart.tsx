@@ -326,12 +326,14 @@ export const KlineChart: React.FC<KlineChartProps> = ({
           ctx.lineTo(getX(pts[pIdx].index), getPriceY(pts[pIdx].price));
         }
         ctx.closePath();
-        ctx.fillStyle = 'rgba(168, 85, 247, 0.22)';
+        ctx.fillStyle = 'rgba(168, 85, 247, 0.18)';
         ctx.fill();
 
-        ctx.strokeStyle = '#f97316';
-        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = 'rgba(34, 211, 238, 0.8)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([5, 4]);
         ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
 
@@ -651,27 +653,29 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
           // Draw Badge Box
           ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-          ctx.strokeStyle = '#eab308';
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.9)';
+          ctx.lineWidth = 1.2;
           ctx.beginPath();
           ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
           ctx.fill();
           ctx.stroke();
 
           // Badge Text
-          ctx.fillStyle = '#fde047';
+          ctx.fillStyle = '#67e8f9';
           ctx.font = 'bold 11px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText('V 形反转 ↓', vx, badgeY + 15);
           ctx.textAlign = 'left';
 
           // Pointer Line
-          ctx.strokeStyle = '#eab308';
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(34, 211, 238, 0.9)';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 3]);
           ctx.beginPath();
           ctx.moveTo(vx, badgeY + badgeH);
           ctx.lineTo(vx, vy - 4);
           ctx.stroke();
+          ctx.setLineDash([]);
         }
       }
     }
