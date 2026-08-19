@@ -645,7 +645,7 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
     }
 
     // Pad the box vertically so its border lines never touch the wick tips
-    const pad = (boxMax - boxMin) * 0.06;
+    const pad = (boxMax - boxMin) * 0.08;
     boxes.push({
       startIdx: offset + start,
       endIdx: offset + end,
@@ -675,7 +675,7 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
     }
 
     // Pad the box vertically so its border lines never touch the wick tips
-    const pad = (boxMax - boxMin) * 0.06;
+    const pad = (boxMax - boxMin) * 0.08;
     boxes.push({
       startIdx: offset + start,
       endIdx: offset + end,

@@ -351,9 +351,16 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.fillStyle = box.color;
         ctx.fillRect(x1, yTop, boxW, boxH);
 
+        // No full border rect: a horizontal border line would visually cut
+        // across candle wicks. Only faint vertical edges to hint the range.
         ctx.strokeStyle = box.borderColor;
         ctx.lineWidth = 1;
-        ctx.strokeRect(x1, yTop, boxW, boxH);
+        ctx.beginPath();
+        ctx.moveTo(x1, yTop);
+        ctx.lineTo(x1, yBot);
+        ctx.moveTo(x2, yTop);
+        ctx.lineTo(x2, yBot);
+        ctx.stroke();
 
         // Optional label inside box
         if (box.label) {
