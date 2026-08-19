@@ -23,6 +23,8 @@ export interface StockQuote {
   unit?: string;
   exchange?: string;
   category?: string;
+  upCount?: number; // 板块上涨家数
+  downCount?: number; // 板块下跌家数
 }
 
 export interface KlinePoint {

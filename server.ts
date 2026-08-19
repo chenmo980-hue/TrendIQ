@@ -12,6 +12,7 @@ import { getRealTimeLimitUpBoardData } from './lib/realtimeLimitUpService';
 import { fetchStockDragonTigerDetail } from './lib/stockDragonTigerService';
 import { fetchFuturesQuote, fetchFuturesKline, searchFutures } from './lib/futuresService';
 import { fetchSectorDetail, fetchSectorKline, searchSectors, findSectorForStockOrAsset } from './lib/sectorService';
+import { fetchSectorBoards, fetchSectorBoardDetail } from './lib/sectorBoardService';
 import { FUTURES_DATABASE, resolveFutureItem } from './lib/futuresData';
 import { SECTOR_DATABASE } from './lib/sectorCatalog';
 import type { KlinePoint, StockQuote, StockSearchResult, KlinePeriod } from './src/types';
@@ -267,6 +268,32 @@ async function startServer() {
     res.json(data);
   }));
 
+  // 3.1.1 Sector Board List endpoint (real-time 板块/题材 from Eastmoney)
+  app.get('/api/sector-boards', withJsonSafety(async (req, res) => {
+    const type = String(req.query.type || 'all') as 'industry' | 'concept' | 'all';
+    const sort = String(req.query.sort || 'hot') as 'changePercent' | 'turnover' | 'upCount' | 'hot';
+    const order = String(req.query.order || 'desc') as 'desc' | 'asc';
+    const q = String(req.query.q || '').trim().toLowerCase();
+
+    const boards = await fetchSectorBoards(type, sort, order);
+    const filtered = q ? boards.filter((b) => b.name.toLowerCase().includes(q) || b.code.toLowerCase().includes(q)) : boards;
+
+    res.json({ boards: filtered, total: filtered.length, timestamp: Date.now() });
+  }));
+
+  // 3.1.2 Sector Board Detail endpoint (quote + constituents for a raw BK code)
+  app.get('/api/sector-board-detail', withJsonSafety(async (req, res) => {
+    const code = String(req.query.code || '').trim();
+    if (!code) {
+      return res.status(400).json({ error: 'Sector board code is required' });
+    }
+    const data = await fetchSectorBoardDetail(code);
+    if (!data) {
+      return res.status(404).json({ error: 'Sector board not found' });
+    }
+    res.json(data);
+  }));
+
   // 3.2 Futures Detail endpoint
   app.get('/api/futures-detail', withJsonSafety(async (req, res) => {
     const symbol = String(req.query.symbol || req.query.code || '').trim();
@@ -328,9 +355,10 @@ async function startServer() {
       });
     }
 
-    // B. Check if the target is a Sector / Concept (e.g. BK_DKJJ, BK_SEMICONDUCTOR, or sector name)
+    // B. Check if the target is a Sector / Concept (e.g. BK_DKJJ, BK_SEMICONDUCTOR, or sector name, or raw BK code BK1492)
     const isSector =
       rawCode.startsWith('BK_') ||
+      /^BK\d+$/i.test(rawCode) ||
       SECTOR_DATABASE.some((s) => s.code.toLowerCase() === rawCode.toLowerCase() || s.name === rawCode);
 
     if (isSector) {
@@ -359,6 +387,45 @@ async function startServer() {
           assetType: 'sector',
           sector: sectorDetail.sector,
           constituents: sectorDetail.constituents,
+        });
+      }
+
+      // Raw BK code (not in the curated catalog): use live board detail
+      const boardDetail = await fetchSectorBoardDetail(rawCode);
+      if (boardDetail) {
+        const klineData = await fetchSectorKline(boardDetail.board.code, period);
+        const quote = { ...boardDetail.quote };
+        // Align price with real K-line close
+        if (klineData.length > 0) {
+          const last = klineData[klineData.length - 1];
+          if (last && last.close > 0) {
+            quote.price = last.close;
+            quote.high = Math.max(quote.high, last.high);
+            quote.low = Math.min(quote.low, last.low);
+            if (period === 'day' && klineData.length > 1) {
+              const prevClose = klineData[klineData.length - 2].close || last.open;
+              quote.prevClose = prevClose;
+              quote.change = +(last.close - prevClose).toFixed(2);
+              quote.changePercent = prevClose > 0 ? +(((last.close - prevClose) / prevClose) * 100).toFixed(2) : quote.changePercent;
+            }
+          }
+        }
+        return res.json({
+          quote,
+          klineData,
+          assetType: 'sector',
+          sector: {
+            code: boardDetail.board.code,
+            bkCode: boardDetail.board.code,
+            name: boardDetail.board.name,
+            category: boardDetail.board.type === 'concept' ? '题材概念' : '行业板块',
+            description: `${boardDetail.board.name} 实时板块，上涨${boardDetail.board.upCount}家/下跌${boardDetail.board.downCount}家，领涨股 ${boardDetail.board.leadStockName || '-'}。`,
+            leadStockCode: boardDetail.board.leadStockCode,
+            leadStockName: boardDetail.board.leadStockName,
+            constituents: boardDetail.constituents.map((c) => ({ code: c.code, name: c.name })),
+            catalyst: '',
+          },
+          constituents: boardDetail.constituents,
         });
       }
     }

@@ -269,15 +269,31 @@ export function findSectorForStockOrAsset(codeOrSymbol: string, nameHint?: strin
  * Fetches authentic sector index K-line from Eastmoney's real sector board index (BK code)
  */
 export async function fetchSectorKline(sectorCode: string, period: KlinePeriod): Promise<KlinePoint[]> {
-  const sector = SECTOR_DATABASE.find(
+  // Resolve BK code from the catalog, or accept a raw BK code directly (e.g. "BK1492")
+  let bkCode = '';
+  const catalogMatch = SECTOR_DATABASE.find(
     (s) =>
       s.code.toLowerCase() === sectorCode.toLowerCase() ||
       s.bkCode.toLowerCase() === sectorCode.toLowerCase() ||
       s.name.includes(sectorCode) ||
       sectorCode.includes(s.name)
   );
-  if (!sector) return [];
+  if (catalogMatch) {
+    bkCode = catalogMatch.bkCode;
+  } else {
+    const raw = sectorCode.replace(/^BK_/i, '').toUpperCase();
+    if (/^BK\d+$/.test(raw)) bkCode = raw;
+  }
 
+  if (!bkCode) return [];
+
+  return fetchSectorKlineByBkCode(bkCode, period);
+}
+
+/**
+ * Core implementation fetching sector K-line by Eastmoney BK code (e.g. BK1492)
+ */
+async function fetchSectorKlineByBkCode(bkCode: string, period: KlinePeriod): Promise<KlinePoint[]> {
   try {
     // Map periods to Eastmoney klt values.
     // 90m is synthesized from 30m bars, 120m from 60m bars (same rule as individual stocks).
@@ -290,7 +306,7 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
     else if (period === '60m' || period === '120m') { klt = '60'; lmt = 400; }
 
     const url =
-      `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${sector.bkCode}` +
+      `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${bkCode}` +
       `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
       `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
 

@@ -1,10 +1,10 @@
 import React from 'react';
 import { StockSearchResult, MarketIndexItem, StockQuote } from '../types';
-import { Flame, Layers, Camera, LineChart } from 'lucide-react';
+import { Flame, Layers, Camera, LineChart, Grid3x3 } from 'lucide-react';
 
 interface HeaderProps {
-  currentTab: 'indicator' | 'image' | 'limitUp';
-  onTabChange: (tab: 'indicator' | 'image' | 'limitUp') => void;
+  currentTab: 'indicator' | 'image' | 'limitUp' | 'sectors';
+  onTabChange: (tab: 'indicator' | 'image' | 'limitUp' | 'sectors') => void;
   onSelectStock?: (code: string) => void;
   marketIndices?: MarketIndexItem[];
   currentQuote?: StockQuote | null;
@@ -52,6 +52,18 @@ export const Header: React.FC<HeaderProps> = ({
           <Flame className="w-3.5 h-3.5 text-red-400" />
           <span>短线龙虎榜</span>
           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
+        </button>
+
+        <button
+          onClick={() => onTabChange('sectors')}
+          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded text-xs font-semibold transition cursor-pointer ${
+            currentTab === 'sectors'
+              ? 'bg-[#1a2330] text-[#d4a038] shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Grid3x3 className="w-3.5 h-3.5" />
+          <span>板块热点</span>
         </button>
 
         <button

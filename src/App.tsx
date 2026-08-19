@@ -8,6 +8,7 @@ import { SectorPanel } from './components/SectorPanel';
 import { FuturesPanel } from './components/FuturesPanel';
 import { ImageAnalyzer } from './components/ImageAnalyzer';
 import { LimitUpBoard } from './components/LimitUpBoard';
+import { SectorHeatBoard } from './components/SectorHeatBoard';
 import {
   KlinePoint,
   StockQuote,
@@ -51,7 +52,7 @@ const POPULAR_FUTURES = [
 ];
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'indicator' | 'image' | 'limitUp'>('indicator');
+  const [currentTab, setCurrentTab] = useState<'indicator' | 'image' | 'limitUp' | 'sectors'>('indicator');
   const [currentCode, setCurrentCode] = useState<string>(''); // 不默认加载任何标的
   const [currentPeriod, setCurrentPeriod] = useState<KlinePeriod>('day');
   const [currentAssetType, setCurrentAssetType] = useState<AssetType>('stock');
@@ -637,6 +638,14 @@ export default function App() {
         ) : currentTab === 'limitUp' ? (
           /* Short-Term Limit-Up Ladder & Dragon-Tiger Board View */
           <LimitUpBoard
+            onSelectStock={(selectedCode) => {
+              handleSelectAsset(selectedCode);
+              setCurrentTab('indicator');
+            }}
+          />
+        ) : currentTab === 'sectors' ? (
+          /* Sector / Concept Heat Board View */
+          <SectorHeatBoard
             onSelectStock={(selectedCode) => {
               handleSelectAsset(selectedCode);
               setCurrentTab('indicator');
