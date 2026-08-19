@@ -1,4 +1,5 @@
-import { StockQuote } from '../src/types';
+import { StockQuote, LimitUpStock } from '../src/types';
+import { fetchLiveLimitUpPool } from './realtimeLimitUpService';
 
 export interface SectorBoardItem {
   code: string; // BK1492
@@ -28,6 +29,14 @@ export interface SectorBoardConstituent {
   turnoverRate: number;
   marketCap: number;
   volume: number;
+  // Enriched limit-up data (merged from the live 涨停池 when available)
+  consecutiveBoards?: number;
+  boardText?: string;
+  firstTime?: string;
+  lastTime?: string;
+  sealAmount?: number;
+  openCount?: number;
+  isBroken?: boolean;
 }
 
 export interface SectorBoardDetailResponse {
@@ -297,11 +306,33 @@ export async function fetchSectorBoardDetail(bkCode: string): Promise<SectorBoar
   const clean = bkCode.replace(/^(BK_|bk|BK)/i, '').toUpperCase();
   const full = clean.startsWith('BK') ? clean : `BK${clean}`;
 
-  const [quote, constituents, boards] = await Promise.all([
+  const [quote, rawConstituents, boards, limitUpPool] = await Promise.all([
     fetchSectorBoardQuote(full),
     fetchSectorBoardConstituents(full),
     fetchSectorBoards('all', 'hot', 'desc'),
+    fetchLiveLimitUpPool().catch(() => [] as LimitUpStock[]),
   ]);
+
+  // Merge live limit-up pool data (first/last seal time, seal amount, board
+  // count, broken count) into matching constituents so the 板块热点 detail page
+  // can show the same 龙虎榜-style fields as the limit-up board.
+  const limitUpMap = new Map<string, LimitUpStock>();
+  for (const lu of limitUpPool) limitUpMap.set(lu.code, lu);
+
+  const constituents = rawConstituents.map((c) => {
+    const lu = limitUpMap.get(c.code);
+    if (!lu) return c;
+    return {
+      ...c,
+      consecutiveBoards: lu.consecutiveBoards,
+      boardText: lu.boardText,
+      firstTime: lu.firstTime,
+      lastTime: lu.lastTime,
+      sealAmount: lu.sealAmount,
+      openCount: lu.openCount,
+      isBroken: lu.isBroken,
+    };
+  });
 
   const board = boards.find((b) => b.code === full);
   if (!board && !quote) return null;

@@ -167,7 +167,7 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
  * times and seal amount — unlike the generic quote list which only has
  * changePercent and always reports first-board.
  */
-async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
+export async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
@@ -213,10 +213,15 @@ async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
       const turnoverRate = parseFloat(item.hs) || 0;
       const marketCap = parseFloat(item.ltsz) || 0;
       const sector = String(item.hybk || '主线热点').replace(/[ⅠⅡⅢ]/g, '');
-      const firstTime = String(item.fbt || '').padStart(4, '0');
-      const lastTime = String(item.lbt || '').padStart(4, '0');
-      const firstTimeStr = `${firstTime.slice(0, 2)}:${firstTime.slice(2)}:00`;
-      const lastTimeStr = `${lastTime.slice(0, 2)}:${lastTime.slice(2)}:00`;
+      const rawFirst = String(item.fbt || '');
+      const rawLast = String(item.lbt || '');
+      const padTime = (v: string) => v.padStart(6, '0'); // HHMMSS
+      const fmtTime = (v: string) => {
+        const s = padTime(v);
+        return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+      };
+      const firstTimeStr = rawFirst ? fmtTime(rawFirst) : '--:--:--';
+      const lastTimeStr = rawLast ? fmtTime(rawLast) : '--:--:--';
 
       const norm = normalizeStockCode(code);
 

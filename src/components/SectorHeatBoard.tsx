@@ -10,6 +10,8 @@ import {
   Crown,
   RefreshCw,
   List,
+  Clock,
+  Coins,
 } from 'lucide-react';
 
 interface SectorBoardItem {
@@ -40,6 +42,13 @@ interface SectorBoardConstituent {
   turnoverRate: number;
   marketCap: number;
   volume: number;
+  consecutiveBoards?: number;
+  boardText?: string;
+  firstTime?: string;
+  lastTime?: string;
+  sealAmount?: number;
+  openCount?: number;
+  isBroken?: boolean;
 }
 
 type BoardType = 'all' | 'industry' | 'concept';
@@ -79,6 +88,23 @@ function heatBg(heat: number): string {
   if (heat >= 60) return 'bg-amber-500/15 border-amber-500/40';
   if (heat >= 40) return 'bg-orange-500/10 border-orange-500/30';
   return 'bg-[#121924] border-[#222d3a]';
+}
+
+function formatMoney(num?: number): string {
+  if (!num || num <= 0) return '--';
+  const abs = Math.abs(num);
+  if (abs >= 100000000) return `${(abs / 100000000).toFixed(2)}亿`;
+  if (abs >= 10000) return `${(abs / 10000).toFixed(0)}万`;
+  return abs.toLocaleString();
+}
+
+function formatTime(t?: string): string {
+  if (!t) return '--:--';
+  // Support "HH:mm:ss" or "HHmmss" style values
+  const s = t.replace(/[^\d:]/g, '');
+  if (s.includes(':')) return s.slice(0, 8);
+  if (s.length >= 6) return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+  return s || '--:--';
 }
 
 export const SectorHeatBoard: React.FC<{
@@ -189,6 +215,14 @@ export const SectorHeatBoard: React.FC<{
     return constOrder === 'asc' ? av - bv : bv - av;
   });
 
+  const limitUpConstituents = constituents.filter(
+    (c) => c.consecutiveBoards || c.sealAmount || c.firstTime
+  );
+  const maxBoardInConstituents = Math.max(
+    0,
+    ...constituents.map((c) => c.consecutiveBoards || 0)
+  );
+
   // ===== Detail View =====
   if (selectedBoard) {
     const up = (detailQuote?.changePercent ?? selectedBoard.changePercent) >= 0;
@@ -259,6 +293,24 @@ export const SectorHeatBoard: React.FC<{
           <div className="bg-[#0e141c] border border-[#1e293b] rounded-lg p-3.5">
             <div className="text-[11px] text-slate-400">下跌家数</div>
             <div className="text-lg font-bold font-mono mt-1 text-emerald-400">{displayDownCount}</div>
+          </div>
+          <div className="bg-[#0e141c] border border-red-500/30 rounded-lg p-3.5">
+            <div className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Flame className="w-3 h-3 text-red-400" />
+              成分股涨停
+            </div>
+            <div className="text-lg font-bold font-mono mt-1 text-red-400">
+              {limitUpConstituents.length}家
+            </div>
+          </div>
+          <div className="bg-[#0e141c] border border-red-500/30 rounded-lg p-3.5">
+            <div className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Crown className="w-3 h-3 text-amber-400" />
+              最高连板
+            </div>
+            <div className="text-lg font-bold font-mono mt-1 text-amber-300">
+              {maxBoardInConstituents > 0 ? `${maxBoardInConstituents}连板` : '--'}
+            </div>
           </div>
           <div className="bg-[#0e141c] border border-[#1e293b] rounded-lg p-3.5 col-span-2">
             <div className="text-[11px] text-slate-400 flex items-center gap-1">
@@ -348,6 +400,10 @@ export const SectorHeatBoard: React.FC<{
                   <th className="px-4 py-2.5 text-right font-medium cursor-pointer" onClick={() => { setConstSortKey('changePercent'); setConstOrder(constOrder === 'desc' ? 'asc' : 'desc'); }}>
                     涨跌幅
                   </th>
+                  <th className="px-4 py-2.5 text-right font-medium">连板</th>
+                  <th className="px-4 py-2.5 text-right font-medium">首次封板</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-amber-400">最后封板</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-amber-300">封单金额</th>
                   <th className="px-4 py-2.5 text-right font-medium cursor-pointer" onClick={() => { setConstSortKey('turnover'); setConstOrder(constOrder === 'desc' ? 'asc' : 'desc'); }}>
                     成交额
                   </th>
@@ -358,23 +414,58 @@ export const SectorHeatBoard: React.FC<{
               <tbody>
                 {sortedConstituents.map((c) => {
                   const cUp = c.changePercent >= 0;
+                  const hasLimitUp = !!c.firstTime || !!c.sealAmount || !!c.consecutiveBoards;
                   return (
                     <tr
                       key={c.code}
                       onClick={() => onSelectStock(c.code)}
-                      className="border-b border-[#141c26] hover:bg-[#121924] transition cursor-pointer"
+                      title="点击跳转该股K线分析"
+                      className={`border-b border-[#141c26] hover:bg-[#121924] transition cursor-pointer ${
+                        hasLimitUp ? 'bg-red-950/20' : ''
+                      }`}
                     >
                       <td className="px-4 py-2.5 font-mono text-xs text-slate-400">{c.code}</td>
                       <td className="px-4 py-2.5">
-                        <span className="font-semibold text-white">{c.name}</span>
-                        {c.code === selectedBoard.leadStockCode && (
-                          <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 rounded">
-                            龙头
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-white">{c.name}</span>
+                          {c.code === selectedBoard.leadStockCode && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 rounded">
+                              龙头
+                            </span>
+                          )}
+                          {c.consecutiveBoards && c.consecutiveBoards >= 2 && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold bg-red-600 text-white border border-red-400 rounded">
+                              {c.consecutiveBoards}连板
+                            </span>
+                          )}
+                          {c.isBroken && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-amber-950 text-amber-400 border border-amber-600/40 rounded">
+                              炸板
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`px-4 py-2.5 text-right font-mono font-bold ${cUp ? 'text-red-400' : 'text-emerald-400'}`}>
                         {cUp ? '+' : ''}{c.changePercent.toFixed(2)}%
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-300">
+                        {c.consecutiveBoards ? `${c.consecutiveBoards}板` : '--'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-400">
+                        {hasLimitUp ? formatTime(c.firstTime) : '--:--'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-300">
+                        {hasLimitUp ? (
+                          <span className="flex items-center justify-end gap-1">
+                            <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                            {formatTime(c.lastTime)}
+                          </span>
+                        ) : (
+                          '--:--'
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-300">
+                        {formatMoney(c.sealAmount)}
                       </td>
                       <td className="px-4 py-2.5 text-right font-mono text-slate-300">
                         {(c.turnover / 1e8).toFixed(1)}亿
@@ -390,7 +481,7 @@ export const SectorHeatBoard: React.FC<{
                 })}
                 {sortedConstituents.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-sm">
+                    <td colSpan={10} className="px-4 py-8 text-center text-slate-500 text-sm">
                       暂无成分股数据
                     </td>
                   </tr>
