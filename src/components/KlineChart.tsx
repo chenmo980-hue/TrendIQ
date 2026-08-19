@@ -422,6 +422,86 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     }
 
     // ----------------------------------------------------
+    // LAYER E1: Channel Lines (通道线 - 黄绿色高亮通道)
+    // ----------------------------------------------------
+    if (showChannelLines && channelLines) {
+      const drawChannelBound = (line: { startIndex: number; endIndex: number; startPrice: number; endPrice: number } | null) => {
+        if (!line) return;
+        const x1 = getX(line.startIndex);
+        const y1 = getPriceY(line.startPrice);
+        const x2 = getX(line.endIndex);
+        const y2 = getPriceY(line.endPrice);
+
+        ctx.strokeStyle = '#a3e635'; // Vibrant Lime
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      };
+
+      drawChannelBound(channelLines.upper);
+      drawChannelBound(channelLines.lower);
+    }
+
+    // Auto Trendlines
+    if (showTrendlines && trendlines.length > 0) {
+      for (const line of trendlines) {
+        if (line.endIndex < renderStartIndex || line.startIndex > renderEndIndex) continue;
+        const x1 = getX(Math.max(renderStartIndex, line.startIndex));
+        const y1 = getPriceY(line.startPrice);
+        const x2 = getX(Math.min(renderEndIndex - 1, line.endIndex));
+        const y2 = getPriceY(line.endPrice);
+
+        ctx.strokeStyle = line.type === 'support' ? 'rgba(74, 222, 128, 0.8)' : 'rgba(244, 63, 94, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // ----------------------------------------------------
+    // LAYER E2: Trade Plan Horizontal Target / Entry / Stop Lines & Badges
+    // ----------------------------------------------------
+    if (showTradePlan && tradePlan) {
+      const drawPlanLine = (price: number, color: string, badgeBg: string, label: string) => {
+        if (price < paddedMinPrice || price > paddedMaxPrice) return;
+        const y = getPriceY(price);
+
+        // Solid Horizontal Line
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(padding.left, y);
+        ctx.lineTo(padding.left + chartWidth, y);
+        ctx.stroke();
+
+        // Right Edge Badge
+        const badgeW = 60;
+        const badgeH = 18;
+        const bx = padding.left + chartWidth + 2;
+        const by = y - badgeH / 2;
+
+        ctx.fillStyle = badgeBg;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, badgeW, badgeH, 3);
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 10px sans-serif';
+        ctx.fillText(`${label} ${price}`, bx + 4, by + 13);
+      };
+
+      drawPlanLine(tradePlan.takeProfit, '#22c55e', '#16a34a', '止盈');
+      drawPlanLine(tradePlan.entry, '#e2e8f0', '#334155', '入场');
+      drawPlanLine(tradePlan.stopLoss, '#ef4444', '#dc2626', '止损');
+    }
+
+    // ----------------------------------------------------
     // LAYER E: Draw Candlesticks and Volume Bars
     // ----------------------------------------------------
     let highestCandle = { idx: renderStartIndex, price: -Infinity };
@@ -550,49 +630,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     }
 
     // ----------------------------------------------------
-    // LAYER G: Channel Lines (通道线 - 黄绿色高亮通道)
-    // ----------------------------------------------------
-    if (showChannelLines && channelLines) {
-      const drawChannelBound = (line: { startIndex: number; endIndex: number; startPrice: number; endPrice: number } | null) => {
-        if (!line) return;
-        const x1 = getX(line.startIndex);
-        const y1 = getPriceY(line.startPrice);
-        const x2 = getX(line.endIndex);
-        const y2 = getPriceY(line.endPrice);
-
-        ctx.strokeStyle = '#a3e635'; // Vibrant Lime
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      };
-
-      drawChannelBound(channelLines.upper);
-      drawChannelBound(channelLines.lower);
-    }
-
-    // Auto Trendlines
-    if (showTrendlines && trendlines.length > 0) {
-      for (const line of trendlines) {
-        if (line.endIndex < renderStartIndex || line.startIndex > renderEndIndex) continue;
-        const x1 = getX(Math.max(renderStartIndex, line.startIndex));
-        const y1 = getPriceY(line.startPrice);
-        const x2 = getX(Math.min(renderEndIndex - 1, line.endIndex));
-        const y2 = getPriceY(line.endPrice);
-
-        ctx.strokeStyle = line.type === 'support' ? 'rgba(74, 222, 128, 0.8)' : 'rgba(244, 63, 94, 0.8)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([6, 3]);
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-    }
-
-    // ----------------------------------------------------
     // LAYER H: V-Shape Reversal Tags (V 形反转 ↓ 标识)
     // ----------------------------------------------------
     if (showPatterns && vReversals.length > 0) {
@@ -630,43 +667,6 @@ export const KlineChart: React.FC<KlineChartProps> = ({
           ctx.stroke();
         }
       }
-    }
-
-    // ----------------------------------------------------
-    // LAYER I: Trade Plan Horizontal Target / Entry / Stop Lines & Badges
-    // ----------------------------------------------------
-    if (showTradePlan && tradePlan) {
-      const drawPlanLine = (price: number, color: string, badgeBg: string, label: string) => {
-        if (price < paddedMinPrice || price > paddedMaxPrice) return;
-        const y = getPriceY(price);
-
-        // Solid Horizontal Line
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(padding.left, y);
-        ctx.lineTo(padding.left + chartWidth, y);
-        ctx.stroke();
-
-        // Right Edge Badge
-        const badgeW = 60;
-        const badgeH = 18;
-        const bx = padding.left + chartWidth + 2;
-        const by = y - badgeH / 2;
-
-        ctx.fillStyle = badgeBg;
-        ctx.beginPath();
-        ctx.roundRect(bx, by, badgeW, badgeH, 3);
-        ctx.fill();
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 10px sans-serif';
-        ctx.fillText(`${label} ${price}`, bx + 4, by + 13);
-      };
-
-      drawPlanLine(tradePlan.takeProfit, '#22c55e', '#16a34a', '止盈');
-      drawPlanLine(tradePlan.entry, '#e2e8f0', '#334155', '入场');
-      drawPlanLine(tradePlan.stopLoss, '#ef4444', '#dc2626', '止损');
     }
 
     // 7. Draw Sub-Indicator (MACD / RSI / KDJ)
