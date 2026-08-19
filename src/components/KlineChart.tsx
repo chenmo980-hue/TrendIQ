@@ -357,7 +357,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
         // Optional label inside box
         if (box.label) {
-          ctx.fillStyle = box.type === 'top' ? '#f59e0b' : '#3b82f6';
+          ctx.fillStyle = box.type === 'top' ? '#a855f7' : '#22d3ee';
           ctx.font = labelFont;
           ctx.fillText(box.label, x1 + 6, yTop + 14);
         }

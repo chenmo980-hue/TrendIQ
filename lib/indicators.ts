@@ -644,14 +644,16 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
       if (subset[k].high > boxMax) boxMax = subset[k].high;
     }
 
+    // Pad the box vertically so its border lines never touch the wick tips
+    const pad = (boxMax - boxMin) * 0.06;
     boxes.push({
       startIdx: offset + start,
       endIdx: offset + end,
-      minPrice: Number(boxMin.toFixed(2)),
-      maxPrice: Number(boxMax.toFixed(2)),
+      minPrice: Number((boxMin - pad).toFixed(2)),
+      maxPrice: Number((boxMax + pad).toFixed(2)),
       type: 'top',
-      color: 'rgba(245, 158, 11, 0.08)',
-      borderColor: 'rgba(245, 158, 11, 0.45)',
+      color: 'rgba(168, 85, 247, 0.10)',
+      borderColor: 'rgba(168, 85, 247, 0.55)',
       label: '高位承压区',
     });
   }
@@ -672,14 +674,16 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
       if (subset[k].high > boxMax) boxMax = subset[k].high;
     }
 
+    // Pad the box vertically so its border lines never touch the wick tips
+    const pad = (boxMax - boxMin) * 0.06;
     boxes.push({
       startIdx: offset + start,
       endIdx: offset + end,
-      minPrice: Number(boxMin.toFixed(2)),
-      maxPrice: Number(boxMax.toFixed(2)),
+      minPrice: Number((boxMin - pad).toFixed(2)),
+      maxPrice: Number((boxMax + pad).toFixed(2)),
       type: 'bottom',
-      color: 'rgba(59, 130, 246, 0.08)',
-      borderColor: 'rgba(59, 130, 246, 0.45)',
+      color: 'rgba(34, 211, 238, 0.10)',
+      borderColor: 'rgba(34, 211, 238, 0.55)',
       label: '支撑筑底区',
     });
   }
