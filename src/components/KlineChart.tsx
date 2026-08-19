@@ -352,12 +352,12 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         ctx.fillRect(x1, yTop, boxW, boxH);
 
         ctx.strokeStyle = box.borderColor;
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 1;
         ctx.strokeRect(x1, yTop, boxW, boxH);
 
         // Optional label inside box
         if (box.label) {
-          ctx.fillStyle = box.borderColor;
+          ctx.fillStyle = box.type === 'top' ? '#f59e0b' : '#3b82f6';
           ctx.font = labelFont;
           ctx.fillText(box.label, x1 + 6, yTop + 14);
         }
@@ -683,7 +683,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
         // Wick
         ctx.strokeStyle = lastColor;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
         ctx.moveTo(lx, getPriceY(lastVisible.high));
         ctx.lineTo(lx, getPriceY(lastVisible.low));

@@ -650,8 +650,8 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
       minPrice: Number(boxMin.toFixed(2)),
       maxPrice: Number(boxMax.toFixed(2)),
       type: 'top',
-      color: 'rgba(245, 158, 11, 0.18)',
-      borderColor: '#f59e0b',
+      color: 'rgba(245, 158, 11, 0.08)',
+      borderColor: 'rgba(245, 158, 11, 0.45)',
       label: '高位承压区',
     });
   }
@@ -678,8 +678,8 @@ export function detectHighlightBoxes(data: KlinePoint[]): HighlightBox[] {
       minPrice: Number(boxMin.toFixed(2)),
       maxPrice: Number(boxMax.toFixed(2)),
       type: 'bottom',
-      color: 'rgba(59, 130, 246, 0.18)',
-      borderColor: '#3b82f6',
+      color: 'rgba(59, 130, 246, 0.08)',
+      borderColor: 'rgba(59, 130, 246, 0.45)',
       label: '支撑筑底区',
     });
   }
