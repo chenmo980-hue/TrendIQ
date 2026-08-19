@@ -669,6 +669,36 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       }
     }
 
+    // ----------------------------------------------------
+    // LAYER J: Redraw today's candle on top of all overlays so shape
+    // boxes / analysis lines never obscure its wick or body.
+    // ----------------------------------------------------
+    const lastVisibleIdx = rightmostDataIdx;
+    const lastVisible = data[lastVisibleIdx];
+    if (lastVisible && lastVisibleIdx >= renderStartIndex && lastVisibleIdx < renderEndIndex) {
+      const lx = getX(lastVisibleIdx);
+      if (lx >= padding.left - candleWidth && lx <= padding.left + chartWidth + candleWidth) {
+        const lastUp = lastVisible.close >= lastVisible.open;
+        const lastColor = lastUp ? '#ef4444' : '#22c55e';
+
+        // Wick
+        ctx.strokeStyle = lastColor;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(lx, getPriceY(lastVisible.high));
+        ctx.lineTo(lx, getPriceY(lastVisible.low));
+        ctx.stroke();
+
+        // Body
+        const lastOpenY = getPriceY(lastVisible.open);
+        const lastCloseY = getPriceY(lastVisible.close);
+        const lastBodyY = Math.min(lastOpenY, lastCloseY);
+        const lastBodyH = Math.max(1.5, Math.abs(lastCloseY - lastOpenY));
+        ctx.fillStyle = lastColor;
+        ctx.fillRect(lx - candleWidth / 2, lastBodyY, candleWidth, lastBodyH);
+      }
+    }
+
     // 7. Draw Sub-Indicator (MACD / RSI / KDJ)
     if (subIndicator === 'MACD') {
       let maxMacdAbs = 0.01;

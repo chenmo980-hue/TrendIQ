@@ -295,8 +295,13 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
       `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
 
     // push2his.eastmoney.com is intermittently rate-limited by Eastmoney.
-    // Retry across a few mirror hostnames before giving up.
-    const hosts = ['push2his.eastmoney.com', 'push2his2.eastmoney.com', 'push2his.eastmoney.com'];
+    // Prefer mirror hostnames (they're currently not limited), main host as last fallback.
+    const hosts = [
+      'push2his2.eastmoney.com',
+      'push2his3.eastmoney.com',
+      'push2his4.eastmoney.com',
+      'push2his.eastmoney.com',
+    ];
 
     let lastError: unknown = null;
     for (let attempt = 0; attempt < hosts.length; attempt++) {
