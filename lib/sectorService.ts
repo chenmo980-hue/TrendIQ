@@ -294,49 +294,69 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
       `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
       `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
 
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-    });
-    clearTimeout(timer);
+    // push2his.eastmoney.com is intermittently rate-limited by Eastmoney.
+    // Retry across a few mirror hostnames before giving up.
+    const hosts = ['push2his.eastmoney.com', 'push2his2.eastmoney.com', 'push2his.eastmoney.com'];
 
-    if (resp.ok) {
-      const rawJson = await resp.json();
-      const list = rawJson?.data?.klines;
-      if (Array.isArray(list) && list.length > 0) {
-        // Cap the number of bars to keep chart rendering snappy
-        const cappedList = list.slice(-lmt);
-        let points: KlinePoint[] = cappedList.map((item: any) => {
-          // Format: "YYYY-MM-DD[,HH:mm],open,close,high,low,volume(手),amount(元)"
-          const parts = String(item).split(',');
-          const time = String(parts[0] || '');
-          const open = parseFloat(parts[1]) || 0;
-          const close = parseFloat(parts[2]) || 0;
-          const high = parseFloat(parts[3]) || Math.max(open, close);
-          const low = parseFloat(parts[4]) || Math.min(open, close);
-          const volume = (parseFloat(parts[5]) || 0) * 100;
-          const turnover = parseFloat(parts[6]) || 0;
-
-          return {
-            time,
-            open,
-            high,
-            low,
-            close,
-            volume,
-            turnover,
-          };
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < hosts.length; attempt++) {
+      try {
+        const attemptUrl = url.replace('push2his.eastmoney.com', hosts[attempt]);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        const resp = await fetch(attemptUrl, {
+          signal: controller.signal,
+          // Connection: close avoids Eastmoney resetting Node's keep-alive sockets
+          headers: { 'User-Agent': 'Mozilla/5.0', Connection: 'close' },
         });
+        clearTimeout(timer);
 
-        // Handle 90m / 120m synthesis from 30m / 60m source bars
-        if (period === '90m' || period === '120m') {
-          points = aggregateMinuteKline(points, period);
+        if (resp.ok) {
+          const rawJson = await resp.json();
+          const list = rawJson?.data?.klines;
+          if (Array.isArray(list) && list.length > 0) {
+            // Cap the number of bars to keep chart rendering snappy
+            const cappedList = list.slice(-lmt);
+            let points: KlinePoint[] = cappedList.map((item: any) => {
+              // Format: "YYYY-MM-DD[,HH:mm],open,close,high,low,volume(手),amount(元)"
+              const parts = String(item).split(',');
+              const time = String(parts[0] || '');
+              const open = parseFloat(parts[1]) || 0;
+              const close = parseFloat(parts[2]) || 0;
+              const high = parseFloat(parts[3]) || Math.max(open, close);
+              const low = parseFloat(parts[4]) || Math.min(open, close);
+              const volume = (parseFloat(parts[5]) || 0) * 100;
+              const turnover = parseFloat(parts[6]) || 0;
+
+              return {
+                time,
+                open,
+                high,
+                low,
+                close,
+                volume,
+                turnover,
+              };
+            });
+
+            // Handle 90m / 120m synthesis from 30m / 60m source bars
+            if (period === '90m' || period === '120m') {
+              points = aggregateMinuteKline(points, period);
+            }
+
+            return points;
+          }
         }
-
-        return points;
+        lastError = new Error(`sector kline resp not ok: ${resp.status}`);
+      } catch (err) {
+        lastError = err;
+        // brief backoff before retrying next host
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
+    }
+
+    if (lastError) {
+      console.warn('fetchSectorKline error (all hosts):', lastError);
     }
   } catch (err) {
     console.warn('fetchSectorKline error:', err);

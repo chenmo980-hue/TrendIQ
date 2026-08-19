@@ -47,8 +47,8 @@ export async function fetchStockDragonTigerDetail(code: string): Promise<StockDr
     const timer = setTimeout(() => controller.abort(), 3500);
 
     const [bResp, sResp] = await Promise.all([
-      fetch(buyUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } }),
-      fetch(sellUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0' } }),
+      fetch(buyUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0', Connection: 'close' } }),
+      fetch(sellUrl, { signal: controller.signal, headers: { 'User-Agent': 'Mozilla/5.0', Connection: 'close' } }),
     ]);
     clearTimeout(timer);
 
