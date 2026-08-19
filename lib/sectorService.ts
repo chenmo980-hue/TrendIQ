@@ -1,6 +1,7 @@
 import { StockQuote, KlinePoint, KlinePeriod, StockSearchResult } from '../src/types';
 import { SECTOR_DATABASE, SectorItem } from './sectorCatalog';
 import { normalizeStockCode } from './stockCode';
+import { aggregateMinuteKline } from './aggregateMinuteKline';
 
 export interface SectorDetailResponse {
   sector: SectorItem;
@@ -265,7 +266,7 @@ export function findSectorForStockOrAsset(codeOrSymbol: string, nameHint?: strin
 }
 
 /**
- * Fetches authentic K-line for a sector synthesized from its core leaders with Tencent QFQ data
+ * Fetches authentic sector index K-line from Eastmoney's real sector board index (BK code)
  */
 export async function fetchSectorKline(sectorCode: string, period: KlinePeriod): Promise<KlinePoint[]> {
   const sector = SECTOR_DATABASE.find(
@@ -277,19 +278,21 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
   );
   if (!sector) return [];
 
-  const norm = normalizeStockCode(sector.leadStockCode);
-
   try {
-    let pParam = 'day';
-    if (period === '1m' || period === '5m') pParam = 'm5';
-    else if (period === '15m') pParam = 'm15';
-    else if (period === '30m') pParam = 'm30';
-    else if (period === '60m' || period === '90m' || period === '120m') pParam = 'm60';
+    // Map periods to Eastmoney klt values.
+    // 90m is synthesized from 30m bars, 120m from 60m bars (same rule as individual stocks).
+    let klt = '101';
+    let lmt = 500;
+    if (period === '1m') { klt = '1'; lmt = 800; }
+    else if (period === '5m') { klt = '5'; lmt = 400; }
+    else if (period === '15m') { klt = '15'; lmt = 400; }
+    else if (period === '30m' || period === '90m') { klt = '30'; lmt = 400; }
+    else if (period === '60m' || period === '120m') { klt = '60'; lmt = 400; }
 
     const url =
-      pParam === 'day'
-        ? `http://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=${norm.fullCode},day,,,180,qfq`
-        : `http://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${norm.fullCode},${pParam},,120`;
+      `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${sector.bkCode}` +
+      `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
+      `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
@@ -301,28 +304,20 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
 
     if (resp.ok) {
       const rawJson = await resp.json();
-      const stockObj = rawJson.data?.[norm.fullCode];
-      const list = stockObj?.qfqday || stockObj?.day || stockObj?.[pParam] || [];
-
+      const list = rawJson?.data?.klines;
       if (Array.isArray(list) && list.length > 0) {
-        const firstPrice = parseFloat(list[0][2]) || 1;
-        const baseIndex = 1000;
-
-        return list.map((item: any) => {
-          let time = String(item[0] || '');
-          if (time.length === 12) {
-            time = `${time.substring(0, 4)}-${time.substring(4, 6)}-${time.substring(6, 8)} ${time.substring(8, 10)}:${time.substring(10, 12)}`;
-          }
-          const openRaw = parseFloat(item[1]) || 0;
-          const closeRaw = parseFloat(item[2]) || 0;
-          const highRaw = parseFloat(item[3]) || Math.max(openRaw, closeRaw);
-          const lowRaw = parseFloat(item[4]) || Math.min(openRaw, closeRaw);
-          const volume = (parseFloat(item[5]) || 0) * 100;
-
-          const open = +((openRaw / firstPrice) * baseIndex).toFixed(2);
-          const close = +((closeRaw / firstPrice) * baseIndex).toFixed(2);
-          const high = +((highRaw / firstPrice) * baseIndex).toFixed(2);
-          const low = +((lowRaw / firstPrice) * baseIndex).toFixed(2);
+        // Cap the number of bars to keep chart rendering snappy
+        const cappedList = list.slice(-lmt);
+        let points: KlinePoint[] = cappedList.map((item: any) => {
+          // Format: "YYYY-MM-DD[,HH:mm],open,close,high,low,volume(手),amount(元)"
+          const parts = String(item).split(',');
+          const time = String(parts[0] || '');
+          const open = parseFloat(parts[1]) || 0;
+          const close = parseFloat(parts[2]) || 0;
+          const high = parseFloat(parts[3]) || Math.max(open, close);
+          const low = parseFloat(parts[4]) || Math.min(open, close);
+          const volume = (parseFloat(parts[5]) || 0) * 100;
+          const turnover = parseFloat(parts[6]) || 0;
 
           return {
             time,
@@ -331,9 +326,16 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
             low,
             close,
             volume,
-            turnover: volume * close,
+            turnover,
           };
         });
+
+        // Handle 90m / 120m synthesis from 30m / 60m source bars
+        if (period === '90m' || period === '120m') {
+          points = aggregateMinuteKline(points, period);
+        }
+
+        return points;
       }
     }
   } catch (err) {

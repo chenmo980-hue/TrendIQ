@@ -337,8 +337,24 @@ async function startServer() {
       const sectorDetail = await fetchSectorDetail(rawCode);
       if (sectorDetail) {
         const klineData = await fetchSectorKline(sectorDetail.sector.code, period);
+        const quote = { ...sectorDetail.quote };
+        // Align the sector snapshot price with the real sector index K-line close
+        if (klineData.length > 0) {
+          const last = klineData[klineData.length - 1];
+          if (last && last.close > 0) {
+            quote.price = last.close;
+            quote.high = Math.max(quote.high, last.high);
+            quote.low = Math.min(quote.low, last.low);
+            if (period === 'day' && klineData.length > 1) {
+              const prevClose = klineData[klineData.length - 2].close || last.open;
+              quote.prevClose = prevClose;
+              quote.change = +(last.close - prevClose).toFixed(2);
+              quote.changePercent = prevClose > 0 ? +(((last.close - prevClose) / prevClose) * 100).toFixed(2) : quote.changePercent;
+            }
+          }
+        }
         return res.json({
-          quote: sectorDetail.quote,
+          quote,
           klineData,
           assetType: 'sector',
           sector: sectorDetail.sector,
