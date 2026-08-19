@@ -375,13 +375,13 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     // LAYER D: S1 / R1 Key Horizontal Support & Resistance Bands
     // ----------------------------------------------------
     if (showSupportResistance) {
-      ctx.setLineDash([4, 4]);
-      // S1 (Support Cyan)
+      ctx.setLineDash([6, 4]);
+      // S1 (Support Amber)
       for (let sIdx = 0; sIdx < supports.length; sIdx++) {
         const sup = supports[sIdx];
         if (sup >= paddedMinPrice && sup <= paddedMaxPrice) {
           const y = getPriceY(sup);
-          ctx.strokeStyle = sIdx === 0 ? 'rgba(6, 182, 212, 0.85)' : 'rgba(34, 197, 94, 0.45)';
+          ctx.strokeStyle = sIdx === 0 ? 'rgba(251, 191, 36, 0.85)' : 'rgba(251, 191, 36, 0.45)';
           ctx.lineWidth = sIdx === 0 ? 2 : 1;
           ctx.beginPath();
           ctx.moveTo(padding.left, y);
@@ -390,23 +390,23 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
           // S1 Badge
           if (sIdx === 0) {
-            ctx.fillStyle = '#06b6d4';
+            ctx.fillStyle = '#fbbf24';
             ctx.font = 'bold 11px sans-serif';
             ctx.fillText('S1', padding.left + 12, y - 4);
           }
 
           ctx.font = labelFont;
-          ctx.fillStyle = sIdx === 0 ? '#06b6d4' : '#22c55e';
+          ctx.fillStyle = sIdx === 0 ? '#fbbf24' : '#f59e0b';
           ctx.fillText(`支撑 ${sup}`, padding.left + chartWidth + 4, y - 2);
         }
       }
 
-      // R1 (Resistance Rose)
+      // R1 (Resistance Violet)
       for (let rIdx = 0; rIdx < resistances.length; rIdx++) {
         const res = resistances[rIdx];
         if (res >= paddedMinPrice && res <= paddedMaxPrice) {
           const y = getPriceY(res);
-          ctx.strokeStyle = rIdx === 0 ? 'rgba(244, 63, 94, 0.85)' : 'rgba(239, 68, 68, 0.45)';
+          ctx.strokeStyle = rIdx === 0 ? 'rgba(168, 85, 247, 0.85)' : 'rgba(168, 85, 247, 0.45)';
           ctx.lineWidth = rIdx === 0 ? 2 : 1;
           ctx.beginPath();
           ctx.moveTo(padding.left, y);
@@ -415,13 +415,13 @@ export const KlineChart: React.FC<KlineChartProps> = ({
 
           // R1 Badge
           if (rIdx === 0) {
-            ctx.fillStyle = '#f43f5e';
+            ctx.fillStyle = '#a855f7';
             ctx.font = 'bold 11px sans-serif';
             ctx.fillText('R1', padding.left + 12, y - 4);
           }
 
           ctx.font = labelFont;
-          ctx.fillStyle = rIdx === 0 ? '#f43f5e' : '#ef4444';
+          ctx.fillStyle = rIdx === 0 ? '#a855f7' : '#9333ea';
           ctx.fillText(`阻力 ${res}`, padding.left + chartWidth + 4, y - 2);
         }
       }
@@ -460,7 +460,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
         const x2 = getX(Math.min(renderEndIndex - 1, line.endIndex));
         const y2 = getPriceY(line.endPrice);
 
-        ctx.strokeStyle = line.type === 'support' ? 'rgba(74, 222, 128, 0.8)' : 'rgba(244, 63, 94, 0.8)';
+        ctx.strokeStyle = line.type === 'support' ? 'rgba(251, 191, 36, 0.8)' : 'rgba(168, 85, 247, 0.8)';
         ctx.lineWidth = 1.5;
         ctx.setLineDash([6, 3]);
         ctx.beginPath();
