@@ -1,6 +1,8 @@
 import { LimitUpStock, SectorLimitUpGroup, DragonTigerSeat, LimitUpLadderSummary } from '../src/types';
 import { normalizeStockCode } from './stockCode';
 import { LIMIT_UP_STOCKS_DATA, SECTOR_LIMIT_UP_GROUPS, DRAGON_TIGER_SEATS_DATA, getLimitUpSummary } from './limitUpData';
+import { resolveSeatMeta, FAMOUS_HOT_MONEY_MAP } from './seatMeta';
+import { getBeijingDate, formatBeijingDateStr } from './sampleData';
 
 /**
  * ======================================================================================
@@ -319,27 +321,17 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
   // 2. 只使用 MASTER_SECTOR_GROUPS 作为板块骨干，不为动态补充股票创建新板块
   // 动态补充股票已包含在 finalStocks 中，但不参与板块分组展示
 
-  // Build dragon tiger seats: use MASTER_DRAGON_TIGER_SEATS as backbone, enrich with live data if available
-  let finalDragonTiger = MASTER_DRAGON_TIGER_SEATS.map((s) => ({ ...s }));
+  // Build dragon tiger seats: prefer live data from the latest trade date,
+  // falling back to the static master seats when the live fetch fails.
+  let finalDragonTiger: DragonTigerSeat[] = MASTER_DRAGON_TIGER_SEATS.map((s) => ({ ...s }));
 
-  // Try to fetch live dragon tiger data and merge
   try {
     const liveDT = await fetchLiveDragonTiger();
     if (liveDT.length > 0) {
-      // Simple merge: update netBuyTotal and stocksTraded for matching seats
-      for (const liveSeat of liveDT) {
-        const idx = finalDragonTiger.findIndex((s) => s.seatName === liveSeat.seatName);
-        if (idx >= 0) {
-          finalDragonTiger[idx] = {
-            ...finalDragonTiger[idx],
-            netBuyTotal: liveSeat.netBuyTotal ?? finalDragonTiger[idx].netBuyTotal,
-            stocksTraded: (liveSeat.stocksTraded?.length ?? 0) > 0 ? liveSeat.stocksTraded! : finalDragonTiger[idx].stocksTraded,
-          };
-        }
-      }
+      finalDragonTiger = liveDT;
     }
   } catch {
-    // ignore
+    // ignore, keep static master data as fallback
   }
 
   // Calculate summary from MASTER stocks only (not dynamic supplementary stocks)
@@ -355,7 +347,7 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
   const topDragon = masterStocksOnly.find((s) => s.consecutiveBoards === maxBoards) || masterStocksOnly[0];
 
   const summary: LimitUpLadderSummary = {
-    date: new Date().toISOString().slice(0, 10),
+    date: formatBeijingDateStr(getBeijingDate()),
     totalLimitUp: limitUpCount,
     totalLimitDown: 2,
     brokenCount,
@@ -392,130 +384,153 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
 async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
+    const timer = setTimeout(() => controller.abort(), 5000);
 
-    const lhbUrl =
-      'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_ORGANIZATION_TRADE_DETAILS&columns=ALL&sortColumns=TRADE_DATE,NET_BUY_AMT&sortTypes=-1,-1&pageNumber=1&pageSize=40';
-
-    const resp = await fetch(lhbUrl, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Referer: 'https://data.eastmoney.com/stock/lhb.html',
-      },
-    });
+    // Query the latest trade date available in the billboard detail report
+    const latestDateResp = await fetch(
+      'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSBUY&columns=ALL&sortColumns=TRADE_DATE&sortTypes=-1&pageNumber=1&pageSize=1',
+      {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Referer: 'https://data.eastmoney.com/stock/lhb.html',
+        },
+      }
+    );
     clearTimeout(timer);
 
-    if (!resp.ok) return [];
+    if (!latestDateResp.ok) return [];
 
-    const json = await resp.json();
-    const rawData = json?.result?.data || [];
+    const latestJson = await latestDateResp.json();
+    const latestRows = latestJson?.result?.data || [];
+    const latestDateRaw = latestRows[0]?.TRADE_DATE;
+    if (!latestDateRaw) return [];
+    const latestDateStr = String(latestDateRaw).split(' ')[0];
 
+    // Fetch the latest trade date's full buy-side seat detail
+    const detailResp = await fetch(
+      `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSBUY&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BUY&sortTypes=-1&pageNumber=1&pageSize=500`,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          Referer: 'https://data.eastmoney.com/stock/lhb.html',
+        },
+      }
+    );
+
+    if (!detailResp.ok) return [];
+
+    const detailJson = await detailResp.json();
+    const rawRows = detailJson?.result?.data || [];
+
+    // Fetch the daily billboard list for the same date to build a code -> name map
+    // (the seat-detail report does not include SECURITY_NAME_ABBR)
+    const codeNameMap = new Map<string, string>();
+    try {
+      const listResp = await fetch(
+        `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DAILYBILLBOARD_DETAILS&columns=SECURITY_CODE,SECURITY_NAME_ABBR&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BILLBOARD_NET_AMT&sortTypes=-1&pageNumber=1&pageSize=300`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://data.eastmoney.com/stock/lhb.html',
+          },
+        }
+      );
+      if (listResp.ok) {
+        const listJson = await listResp.json();
+        const listRows = listJson?.result?.data || [];
+        for (const row of listRows) {
+          const code = String(row.SECURITY_CODE || '').padStart(6, '0');
+          const name = String(row.SECURITY_NAME_ABBR || '').trim();
+          if (code && name) codeNameMap.set(code, name);
+        }
+      }
+    } catch {
+      // name map is best-effort only
+    }
+
+    // Aggregate by seat. Prefer matching the seatName defined in the static master
+    // knowledge base so that win-rate / hotMoneyTag / description stay intact.
     const seatMap = new Map<string, DragonTigerSeat>();
 
-    // Base seats matching the type
-    const baseSeats: DragonTigerSeat[] = [
-      {
-        seatName: '机构专用席位 (多席位净买)',
-        seatType: 'institution',
-        netBuyTotal: 0,
-        winRate30d: 78.5,
-        stocksTraded: [],
-      },
-      {
-        seatName: '中信证券北京呼家楼营业部',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 84.2,
-        stocksTraded: [],
-      },
-      {
-        seatName: '华泰证券天津东丽开发区 (六一路)',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 86.8,
-        stocksTraded: [],
-      },
-      {
-        seatName: '国泰君安上海江苏路 (章盟主)',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 75.6,
-        stocksTraded: [],
-      },
-      {
-        seatName: '中信证券西安朱雀大街 (方新侠)',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 79.4,
-        stocksTraded: [],
-      },
-      {
-        seatName: '中信建投杭州庆春路 (作手新一)',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 72.8,
-        stocksTraded: [],
-      },
-      {
-        seatName: '国盛证券宁波桑田路',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 69.5,
-        stocksTraded: [],
-      },
-      {
-        seatName: '中国银河北京金融街 (金荣街)',
-        seatType: 'hot_money',
-        netBuyTotal: 0,
-        winRate30d: 74.0,
-        stocksTraded: [],
-      },
-    ];
+    const getSeat = (rawDeptName: string): DragonTigerSeat | null => {
+      const dept = String(rawDeptName || '').trim();
+      if (!dept) return null;
 
-    baseSeats.forEach((s) => seatMap.set(s.seatName!, s));
+      const meta = resolveSeatMeta(dept);
+      // Match an existing master seat by its rawDeptName OR its seatName label
+      let masterSeat =
+        MASTER_DRAGON_TIGER_SEATS.find((s) => s.rawDeptName && s.rawDeptName.includes(dept)) ||
+        MASTER_DRAGON_TIGER_SEATS.find((s) => s.seatName && meta.seatName && s.seatName.includes(meta.seatName)) ||
+        undefined;
 
-    rawData.forEach((item: any, idx: number) => {
-      const code = String(item.SECURITY_CODE || '').padStart(6, '0');
-      const name = String(item.SECURITY_NAME_ABBR || `标的${code}`);
-      const changePercent = parseFloat(item.CHANGE_RATE) || 0;
-      const netBuy = parseFloat(item.NET_BUY_AMT) || 0;
-      const buyAmt = parseFloat(item.BUY_AMT) || 0;
-      const sellAmt = parseFloat(item.SELL_AMT) || 0;
+      const key = masterSeat?.seatName || meta.seatName || dept;
+      if (!key) return null;
 
-      if (!code) return;
-
-      const norm = normalizeStockCode(code);
-
-      const seatKey =
-        idx < 5
-          ? '机构专用席位 (多席位净买)'
-          : idx < 10
-          ? '中信证券北京呼家楼营业部'
-          : idx < 15
-          ? '华泰证券天津东丽开发区 (六一路)'
-          : idx < 20
-          ? '国泰君安上海江苏路 (章盟主)'
-          : idx < 25
-          ? '中信证券西安朱雀大街 (方新侠)'
-          : '中信建投杭州庆春路 (作手新一)';
-
-      const targetSeat = seatMap.get(seatKey);
-      if (targetSeat) {
-        targetSeat.netBuyTotal = (targetSeat.netBuyTotal ?? 0) + netBuy;
-        (targetSeat.stocksTraded ??= []).push({
-          code,
-          name,
-          buyAmount: buyAmt || Math.abs(netBuy),
-          sellAmount: sellAmt || 0,
-          netAmount: netBuy,
-          consecutiveBoards: Math.max(1, Math.floor(Math.abs(netBuy) / 1e8) + 1),
-          boardText: `${Math.max(1, Math.floor(Math.abs(netBuy) / 1e8) + 1)}连板`,
+      if (!seatMap.has(key)) {
+        seatMap.set(key, {
+          seatName: key,
+          rawDeptName: dept,
+          seatType: masterSeat?.seatType || meta.seatType,
+          hotMoneyTag: masterSeat?.hotMoneyTag || meta.hotMoneyTag,
+          description: masterSeat?.description || meta.hotMoneyDesc,
+          totalBuy: 0,
+          netBuyTotal: 0,
+          winRate30d: masterSeat?.winRate30d || meta.winRate30d,
+          stocksTraded: [],
         });
       }
-    });
+      return seatMap.get(key)!;
+    };
 
-    return Array.from(seatMap.values()).filter((s) => (s.stocksTraded?.length ?? 0) > 0);
+    for (const row of rawRows) {
+      const dept = String(row.OPERATEDEPT_NAME || '').trim();
+      if (!dept) continue;
+
+      // Skip investor-type aggregate rows (自然人/机构投资者/中小投资者 etc.)
+      if (/自然人|投资者|股通专用$|机构投资者|中小投资者|其他自然人/.test(dept)) {
+        // Keep 机构专用 and 股通专用 as meaningful seat types
+        if (!dept.includes('机构专用') && !dept.includes('股通专用')) continue;
+      }
+
+      const code = String(row.SECURITY_CODE || '').padStart(6, '0');
+      if (!code) continue;
+
+      const name = codeNameMap.get(code) || String(row.SECURITY_NAME_ABBR || '').trim() || `标的${code}`;
+      const buyAmt = parseFloat(row.BUY) || 0;
+      const sellAmt = parseFloat(row.SELL) || 0;
+      const netAmt = parseFloat(row.NET) || (buyAmt - sellAmt);
+      if (buyAmt <= 0 && netAmt <= 0) continue;
+
+      const seat = getSeat(dept);
+      if (!seat) continue;
+
+      seat.totalBuy = (seat.totalBuy ?? 0) + buyAmt;
+      seat.netBuyTotal = (seat.netBuyTotal ?? 0) + netAmt;
+
+      const existing = seat.stocksTraded?.find((s) => s.code === code);
+      if (existing) {
+        existing.buyAmount += buyAmt;
+        existing.sellAmount += sellAmt;
+        existing.netAmount += netAmt;
+      } else {
+        (seat.stocksTraded ??= []).push({
+          code,
+          name,
+          buyAmount: buyAmt,
+          sellAmount: sellAmt,
+          netAmount: netAmt,
+          consecutiveBoards: 1,
+          boardText: '首板',
+        });
+      }
+    }
+
+    // Remove empty seats and sort by net buy descending
+    return Array.from(seatMap.values())
+      .filter((s) => (s.stocksTraded?.length ?? 0) > 0)
+      .sort((a, b) => (b.netBuyTotal ?? 0) - (a.netBuyTotal ?? 0))
+      .slice(0, 20);
   } catch (err) {
     console.error('fetchLiveDragonTiger error:', err);
     return [];
