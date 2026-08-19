@@ -408,25 +408,41 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
     if (!latestDateRaw) return [];
     const latestDateStr = String(latestDateRaw).split(' ')[0];
 
-    // Fetch the latest trade date's full buy-side seat detail
-    const detailResp = await fetch(
-      `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSBUY&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BUY&sortTypes=-1&pageNumber=1&pageSize=500`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://data.eastmoney.com/stock/lhb.html',
-          Connection: 'close',
-        },
-      }
-    );
+    // Fetch BOTH buy-side and sell-side seat details for the same trade date.
+    // RPT_BILLBOARD_DAILYDETAILSBUY only carries BUY (SELL=null, NET=BUY);
+    // RPT_BILLBOARD_DAILYDETAILSSELL only carries SELL (BUY=null, NET=-SELL).
+    // Merging the two gives the real per-seat net buy amount.
+    const [buyResp, sellResp] = await Promise.all([
+      fetch(
+        `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSBUY&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BUY&sortTypes=-1&pageNumber=1&pageSize=500`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://data.eastmoney.com/stock/lhb.html',
+            Connection: 'close',
+          },
+        }
+      ),
+      fetch(
+        `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSSELL&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=SELL&sortTypes=-1&pageNumber=1&pageSize=500`,
+        {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://data.eastmoney.com/stock/lhb.html',
+            Connection: 'close',
+          },
+        }
+      ),
+    ]);
 
-    if (!detailResp.ok) return [];
+    if (!buyResp.ok || !sellResp.ok) return [];
 
-    const detailJson = await detailResp.json();
-    const rawRows = detailJson?.result?.data || [];
+    const [buyJson, sellJson] = await Promise.all([buyResp.json(), sellResp.json()]);
+    const buyRows = buyJson?.result?.data || [];
+    const sellRows = sellJson?.result?.data || [];
 
-    // Fetch the daily billboard list for the same date to build a code -> name map
-    // (the seat-detail report does not include SECURITY_NAME_ABBR)
+    // Build a code -> name map from the daily billboard list
+    // (the seat-detail reports do not include SECURITY_NAME_ABBR)
     const codeNameMap = new Map<string, string>();
     try {
       const listResp = await fetch(
@@ -486,48 +502,55 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
       return seatMap.get(key)!;
     };
 
-    for (const row of rawRows) {
-      const dept = String(row.OPERATEDEPT_NAME || '').trim();
-      if (!dept) continue;
-
+    const shouldSkipDept = (dept: string): boolean => {
       // Skip investor-type aggregate rows (自然人/机构投资者/中小投资者 etc.)
-      if (/自然人|投资者|股通专用$|机构投资者|中小投资者|其他自然人/.test(dept)) {
+      if (/自然人|投资者|机构投资者|中小投资者|其他自然人/.test(dept)) {
         // Keep 机构专用 and 股通专用 as meaningful seat types
-        if (!dept.includes('机构专用') && !dept.includes('股通专用')) continue;
+        if (!dept.includes('机构专用') && !dept.includes('股通专用')) return true;
       }
+      return false;
+    };
+
+    const applyRow = (row: any) => {
+      const dept = String(row.OPERATEDEPT_NAME || '').trim();
+      if (!dept || shouldSkipDept(dept)) return;
 
       const code = String(row.SECURITY_CODE || '').padStart(6, '0');
-      if (!code) continue;
+      if (!code) return;
 
       const name = codeNameMap.get(code) || String(row.SECURITY_NAME_ABBR || '').trim() || `标的${code}`;
       const buyAmt = parseFloat(row.BUY) || 0;
       const sellAmt = parseFloat(row.SELL) || 0;
-      const netAmt = parseFloat(row.NET) || (buyAmt - sellAmt);
-      if (buyAmt <= 0 && netAmt <= 0) continue;
+      const netAmt = parseFloat(row.NET);
+      const resolvedNet = Number.isFinite(netAmt) ? netAmt : buyAmt - sellAmt;
+      if (buyAmt <= 0 && sellAmt <= 0) return;
 
       const seat = getSeat(dept);
-      if (!seat) continue;
+      if (!seat) return;
 
       seat.totalBuy = (seat.totalBuy ?? 0) + buyAmt;
-      seat.netBuyTotal = (seat.netBuyTotal ?? 0) + netAmt;
+      seat.netBuyTotal = (seat.netBuyTotal ?? 0) + resolvedNet;
 
       const existing = seat.stocksTraded?.find((s) => s.code === code);
       if (existing) {
         existing.buyAmount += buyAmt;
         existing.sellAmount += sellAmt;
-        existing.netAmount += netAmt;
+        existing.netAmount += resolvedNet;
       } else {
         (seat.stocksTraded ??= []).push({
           code,
           name,
           buyAmount: buyAmt,
           sellAmount: sellAmt,
-          netAmount: netAmt,
+          netAmount: resolvedNet,
           consecutiveBoards: 1,
           boardText: '首板',
         });
       }
-    }
+    };
+
+    for (const row of buyRows) applyRow(row);
+    for (const row of sellRows) applyRow(row);
 
     // Remove empty seats and sort by net buy descending
     return Array.from(seatMap.values())
