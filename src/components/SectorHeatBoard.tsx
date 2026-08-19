@@ -108,8 +108,9 @@ function formatTime(t?: string): string {
 }
 
 export const SectorHeatBoard: React.FC<{
+  active?: boolean;
   onSelectStock: (code: string) => void;
-}> = ({ onSelectStock }) => {
+}> = ({ active = true, onSelectStock }) => {
   const [boards, setBoards] = useState<SectorBoardItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [type, setType] = useState<BoardType>('all');
@@ -130,8 +131,8 @@ export const SectorHeatBoard: React.FC<{
   const [constOrder, setConstOrder] = useState<'desc' | 'asc'>('desc');
   const [klineError, setKlineError] = useState<string | null>(null);
 
-  const loadBoards = useCallback(async () => {
-    setLoading(true);
+  const loadBoards = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const resp = await fetch(
@@ -142,9 +143,9 @@ export const SectorHeatBoard: React.FC<{
       setBoards(data.boards || []);
       setLastUpdated(data.timestamp || Date.now());
     } catch (err: any) {
-      setError(err.message || '加载板块失败');
+      if (!silent) setError(err.message || '加载板块失败');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [type, sortKey]);
 
@@ -153,15 +154,15 @@ export const SectorHeatBoard: React.FC<{
   }, [loadBoards]);
 
   const loadDetail = useCallback(
-    async (board: SectorBoardItem, period: KlinePeriod = detailPeriod) => {
+    async (board: SectorBoardItem, period: KlinePeriod = detailPeriod, silent = false) => {
       setSelectedBoard(board);
-      setDetailLoading(true);
+      if (!silent) setDetailLoading(true);
       setKlineError(null);
       try {
         // Load K-line + quote via the unified endpoint (handles raw BK codes)
         const kResp = await fetch(`/api/kline?code=${board.code}&period=${period}`);
         if (!kResp.ok) {
-          setKlineError(`K线加载失败 (HTTP ${kResp.status})`);
+          if (!silent) setKlineError(`K线加载失败 (HTTP ${kResp.status})`);
         } else {
           const kData = await kResp.json();
           setKlineData(kData.klineData || []);
@@ -177,9 +178,9 @@ export const SectorHeatBoard: React.FC<{
           }
         }
       } catch (err: any) {
-        setKlineError(err.message || '加载板块详情失败');
+        if (!silent) setKlineError(err.message || '加载板块详情失败');
       } finally {
-        setDetailLoading(false);
+        if (!silent) setDetailLoading(false);
       }
     },
     [detailPeriod]
@@ -199,6 +200,26 @@ export const SectorHeatBoard: React.FC<{
     setDetailQuote(null);
     setKlineError(null);
   };
+
+  // Periodic refresh only during A-share market hours (Mon-Fri 09:30-11:30, 13:00-15:00 Beijing time)
+  // and only while the board tab is visible. Outside market hours we keep the cached snapshot.
+  useEffect(() => {
+    if (!active) return;
+    const isMarketOpen = () => {
+      const now = new Date();
+      const bj = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 8 * 3600000);
+      const day = bj.getDay();
+      if (day === 0 || day === 6) return false;
+      const t = bj.getHours() * 60 + bj.getMinutes();
+      return (t >= 9 * 60 + 30 && t <= 11 * 60 + 30) || (t >= 13 * 60 && t <= 15 * 60);
+    };
+    if (!isMarketOpen()) return;
+    const timer = setInterval(() => {
+      loadBoards(true);
+      if (selectedBoard) loadDetail(selectedBoard, detailPeriod, true);
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [active, loadBoards, loadDetail, selectedBoard, detailPeriod]);
 
   const filteredBoards = query.trim()
     ? boards.filter(
@@ -515,7 +536,7 @@ export const SectorHeatBoard: React.FC<{
         </div>
 
         <button
-          onClick={loadBoards}
+          onClick={() => loadBoards(false)}
           disabled={loading}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#222d3a] bg-[#10161f] text-slate-300 hover:text-white text-xs font-medium transition cursor-pointer disabled:opacity-50"
         >

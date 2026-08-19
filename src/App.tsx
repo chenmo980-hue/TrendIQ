@@ -20,7 +20,7 @@ import {
 } from './types';
 import { formatPrice } from '../lib/stockCode';
 import { generateTechnicalJudgment } from '../lib/judgment';
-import { Clock, RotateCcw, Flame, Layers, Compass, Search, TrendingUp, X } from 'lucide-react';
+import { Clock, RotateCcw, Flame, Layers, Compass, Search, TrendingUp, X, ArrowLeft } from 'lucide-react';
 
 interface FrequentStock {
   code: string;
@@ -74,6 +74,11 @@ export default function App() {
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Whether the current indicator view was navigated from the sector heat board
+  const [fromSectorBoard, setFromSectorBoard] = useState<boolean>(false);
+  // Once the sector board has been visited it stays mounted (hidden) to preserve state
+  const [sectorsVisited, setSectorsVisited] = useState<boolean>(false);
 
   // Dynamic frequently viewed stocks/assets stored in localStorage
   const [frequentStocks, setFrequentStocks] = useState<FrequentStock[]>(() => {
@@ -150,6 +155,11 @@ export default function App() {
     const interval = setInterval(loadMarketIndices, 30000);
     return () => clearInterval(interval);
   }, [loadMarketIndices]);
+
+  // Mark sector board as visited so it stays mounted (cached) after first visit
+  useEffect(() => {
+    if (currentTab === 'sectors') setSectorsVisited(true);
+  }, [currentTab]);
 
   // Live search debounce
   useEffect(() => {
@@ -313,8 +323,40 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-6 py-4 space-y-4">
+        {/* Sector / Concept Heat Board View - kept mounted (hidden when inactive) so
+            navigation back from a clicked stock does not reload cached data */}
+        {sectorsVisited && (
+          <div className={currentTab === 'sectors' ? '' : 'hidden'}>
+            <SectorHeatBoard
+              active={currentTab === 'sectors'}
+              onSelectStock={(selectedCode) => {
+                setFromSectorBoard(true);
+                handleSelectAsset(selectedCode);
+                setCurrentTab('indicator');
+              }}
+            />
+          </div>
+        )}
+
         {currentTab === 'indicator' ? (
           <>
+            {/* Back-to-sector-board button when arriving from the sector heat board */}
+            {fromSectorBoard && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setFromSectorBoard(false);
+                    setCurrentTab('sectors');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-[#222d3a] bg-[#10161f] text-slate-300 hover:text-white hover:border-[#d4a038] text-xs font-medium transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  返回板块热点
+                </button>
+                <span className="text-[11px] text-slate-500">数据为缓存快照，盘中自动刷新</span>
+              </div>
+            )}
+
             {/* Top Multi-Asset Search Input & Filter System */}
             <div className="space-y-2.5">
               <div className="flex flex-col lg:flex-row lg:items-center gap-3">
@@ -643,15 +685,7 @@ export default function App() {
               setCurrentTab('indicator');
             }}
           />
-        ) : currentTab === 'sectors' ? (
-          /* Sector / Concept Heat Board View */
-          <SectorHeatBoard
-            onSelectStock={(selectedCode) => {
-              handleSelectAsset(selectedCode);
-              setCurrentTab('indicator');
-            }}
-          />
-        ) : (
+        ) : currentTab === 'sectors' ? null : (
           /* Vision AI Chart Analysis Recognition Tab */
           <ImageAnalyzer />
         )}
