@@ -553,6 +553,53 @@ async function startServer() {
         }
       }
 
+      // For minute periods (1m/5m/15m/30m/60m), first try Tencent's mkline
+      // endpoint which provides genuine 1-minute candles (Sina's minimum is 5m).
+      if (!klineData || klineData.length === 0) {
+        const mktParam =
+          period === '1m' ? 'm1' :
+          period === '5m' ? 'm5' :
+          period === '15m' ? 'm15' :
+          period === '30m' ? 'm30' :
+          period === '60m' ? 'm60' : '';
+        if (mktParam) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const mklineUrl = `https://ifzq.gtimg.cn/appstock/app/kline/mkline?param=${norm.fullCode},${mktParam},,320`;
+
+          const mktResp = await fetch(mklineUrl, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+              'Referer': 'https://gu.qq.com',
+            },
+          });
+          clearTimeout(timer);
+
+          if (mktResp.ok) {
+            const mktJson = await mktResp.json();
+            const mktList = mktJson?.data?.[norm.fullCode]?.[mktParam] || [];
+            if (Array.isArray(mktList) && mktList.length > 0) {
+              // Format: [YYYYMMDDHHMM, open, close, high, low, volume, {}, turnoverRate]
+              klineData = mktList.map((item: any) => {
+                const rawTime = String(item[0] || '');
+                const time =
+                  rawTime.length >= 12
+                    ? `${rawTime.slice(0, 4)}-${rawTime.slice(4, 6)}-${rawTime.slice(6, 8)} ${rawTime.slice(8, 10)}:${rawTime.slice(10, 12)}:00`
+                    : rawTime;
+                const open = parseFloat(item[1]) || 0;
+                const close = parseFloat(item[2]) || 0;
+                const high = parseFloat(item[3]) || Math.max(open, close);
+                const low = parseFloat(item[4]) || Math.min(open, close);
+                const volume = parseFloat(item[5]) || 0;
+                const turnover = volume * close;
+                return { time, open, high, low, close, volume, turnover };
+              });
+            }
+          }
+        }
+      }
+
       // If still empty (e.g. minute period or fallback), fetch Sina Kline
       if (!klineData || klineData.length === 0) {
         let scale = '240';
