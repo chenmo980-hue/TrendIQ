@@ -418,6 +418,7 @@ export const SectorHeatBoard: React.FC<{
                 <tr className="text-[11px] text-slate-400 border-b border-[#18202c] bg-[#0a0f16]">
                   <th className="px-4 py-2.5 text-left font-medium">代码</th>
                   <th className="px-4 py-2.5 text-left font-medium">名称</th>
+                  <th className="px-4 py-2.5 text-right font-medium">股价</th>
                   <th className="px-4 py-2.5 text-right font-medium cursor-pointer" onClick={() => { setConstSortKey('changePercent'); setConstOrder(constOrder === 'desc' ? 'asc' : 'desc'); }}>
                     涨跌幅
                   </th>
@@ -466,6 +467,9 @@ export const SectorHeatBoard: React.FC<{
                           )}
                         </div>
                       </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-slate-200">
+                        {c.price > 0 ? c.price.toFixed(2) : '--'}
+                      </td>
                       <td className={`px-4 py-2.5 text-right font-mono font-bold ${cUp ? 'text-red-400' : 'text-emerald-400'}`}>
                         {cUp ? '+' : ''}{c.changePercent.toFixed(2)}%
                       </td>
@@ -502,7 +506,7 @@ export const SectorHeatBoard: React.FC<{
                 })}
                 {sortedConstituents.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-4 py-8 text-center text-slate-500 text-sm">
+                    <td colSpan={11} className="px-4 py-8 text-center text-slate-500 text-sm">
                       暂无成分股数据
                     </td>
                   </tr>

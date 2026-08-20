@@ -169,90 +169,117 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
  */
 export async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-
     const bj = getBeijingDate();
-    const dateStr =
+    const todayStr =
       String(bj.getFullYear()) +
       String(bj.getMonth() + 1).padStart(2, '0') +
       String(bj.getDate()).padStart(2, '0');
 
-    const url =
-      'https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=120&sort=fbt:asc&date=' +
-      dateStr;
-
-    const resp = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        Referer: 'https://quote.eastmoney.com/ztb/',
-      },
-    });
-    clearTimeout(timer);
-
-    if (!resp.ok) return [];
-
-    const json = await resp.json();
-    const pool = json?.data?.pool || [];
-    if (!Array.isArray(pool) || pool.length === 0) return [];
-
-    const result: LimitUpStock[] = [];
-    for (const item of pool) {
-      const code = String(item.c || '').padStart(6, '0');
-      if (!code) continue;
-
-      const name = String(item.n || `标的${code}`);
-      const price = parseFloat(item.p) || 0;
-      const changePercent = parseFloat(item.zdp) || 0;
-      const boards = Math.max(1, parseInt(item.lbc, 10) || 1);
-      const isBroken = parseInt(item.zbc, 10) > 0;
-      const openCount = parseInt(item.zbc, 10) || 0;
-      const sealAmount = Math.round(parseFloat(item.fund) || 0);
-      const turnover = Math.round(parseFloat(item.amount) || 0);
-      const turnoverRate = parseFloat(item.hs) || 0;
-      const marketCap = parseFloat(item.ltsz) || 0;
-      const sector = String(item.hybk || '主线热点').replace(/[ⅠⅡⅢ]/g, '');
-      const rawFirst = String(item.fbt || '');
-      const rawLast = String(item.lbt || '');
-      const padTime = (v: string) => v.padStart(6, '0'); // HHMMSS
-      const fmtTime = (v: string) => {
-        const s = padTime(v);
-        return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
-      };
-      const firstTimeStr = rawFirst ? fmtTime(rawFirst) : '--:--:--';
-      const lastTimeStr = rawLast ? fmtTime(rawLast) : '--:--:--';
-
-      const norm = normalizeStockCode(code);
-
-      result.push({
-        code,
-        name,
-        market: norm.market,
-        fullCode: norm.fullCode,
-        price,
-        change: +(price - price / (1 + changePercent / 100)).toFixed(2),
-        changePercent: +changePercent.toFixed(2),
-        consecutiveBoards: boards,
-        boardText: boards >= 2 ? `${boards}连板` : '首板',
-        sector,
-        subConcepts: [sector, `${boards >= 2 ? boards + '连板' : '首板'}涨停`, '今日涨停'],
-        firstTime: firstTimeStr,
-        lastTime: lastTimeStr,
-        sealAmount,
-        sealRatio: 1.0,
-        turnover,
-        turnoverRate,
-        marketCap,
-        reason: `${sector}板块活跃，${name}${boards >= 2 ? '连续' + boards + '个涨停' : '今日涨停'}，封单${(sealAmount / 1e8).toFixed(2)}亿元。`,
-        dragonTigerType: '待核实',
-        netBuyAmount: 0,
-        isBroken,
-        openCount,
-      });
+    // Try today's date first. If the pool is empty (pre-market, market closed,
+    // or a non-trading day), walk back up to 7 days to find the most recent
+    // trading day's pool. This avoids falling back to stale static master data
+    // (which can contain old/suspended stocks like 蓝盾光电/金螳螂).
+    const dateCandidates: string[] = [];
+    for (let offset = 0; offset < 8; offset++) {
+      const d = new Date(bj);
+      d.setDate(d.getDate() - offset);
+      dateCandidates.push(
+        String(d.getFullYear()) +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          String(d.getDate()).padStart(2, '0')
+      );
     }
 
-    return result;
+    let lastError: unknown = null;
+    for (const dateStr of dateCandidates) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const url =
+          'https://push2ex.eastmoney.com/getTopicZTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=120&sort=fbt:asc&date=' +
+          dateStr;
+
+        const resp = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            Referer: 'https://quote.eastmoney.com/ztb/',
+          },
+        });
+        clearTimeout(timer);
+
+        if (!resp.ok) {
+          lastError = new Error(`HTTP ${resp.status}`);
+          continue;
+        }
+
+        const json = await resp.json();
+        const pool = json?.data?.pool || [];
+        if (!Array.isArray(pool) || pool.length === 0) continue;
+
+        const result: LimitUpStock[] = [];
+        for (const item of pool) {
+          const code = String(item.c || '').padStart(6, '0');
+          if (!code) continue;
+
+          const name = String(item.n || `标的${code}`);
+          const price = parseFloat(item.p) || 0;
+          const changePercent = parseFloat(item.zdp) || 0;
+          const boards = Math.max(1, parseInt(item.lbc, 10) || 1);
+          const isBroken = parseInt(item.zbc, 10) > 0;
+          const openCount = parseInt(item.zbc, 10) || 0;
+          const sealAmount = Math.round(parseFloat(item.fund) || 0);
+          const turnover = Math.round(parseFloat(item.amount) || 0);
+          const turnoverRate = parseFloat(item.hs) || 0;
+          const marketCap = parseFloat(item.ltsz) || 0;
+          const sector = String(item.hybk || '主线热点').replace(/[ⅠⅡⅢ]/g, '');
+          const rawFirst = String(item.fbt || '');
+          const rawLast = String(item.lbt || '');
+          const padTime = (v: string) => v.padStart(6, '0'); // HHMMSS
+          const fmtTime = (v: string) => {
+            const s = padTime(v);
+            return `${s.slice(0, 2)}:${s.slice(2, 4)}:${s.slice(4, 6)}`;
+          };
+          const firstTimeStr = rawFirst ? fmtTime(rawFirst) : '--:--:--';
+          const lastTimeStr = rawLast ? fmtTime(rawLast) : '--:--:--';
+
+          const norm = normalizeStockCode(code);
+
+          result.push({
+            code,
+            name,
+            market: norm.market,
+            fullCode: norm.fullCode,
+            price,
+            change: +(price - price / (1 + changePercent / 100)).toFixed(2),
+            changePercent: +changePercent.toFixed(2),
+            consecutiveBoards: boards,
+            boardText: boards >= 2 ? `${boards}连板` : '首板',
+            sector,
+            subConcepts: [sector, `${boards >= 2 ? boards + '连板' : '首板'}涨停`, '今日涨停'],
+            firstTime: firstTimeStr,
+            lastTime: lastTimeStr,
+            sealAmount,
+            sealRatio: 1.0,
+            turnover,
+            turnoverRate,
+            marketCap,
+            reason: `${sector}板块活跃，${name}${boards >= 2 ? '连续' + boards + '个涨停' : '今日涨停'}，封单${(sealAmount / 1e8).toFixed(2)}亿元。`,
+            dragonTigerType: '待核实',
+            netBuyAmount: 0,
+            isBroken,
+            openCount,
+          });
+        }
+
+        return result;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (lastError) throw lastError;
+    return [];
   } catch {
     return [];
   }
