@@ -608,7 +608,30 @@ export const SectorHeatBoard: React.FC<{
       )}
 
       {loading && boards.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 text-sm">加载板块数据...</div>
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-center gap-2 py-3 text-sm text-[#d4a038]">
+            <RefreshCw className="w-4 h-4 animate-spin" />
+            <span>加载板块数据...</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="p-3.5 rounded-lg border border-[#1e293b] bg-[#0e141c] animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div className="h-3.5 w-24 rounded bg-slate-700/60" />
+                  <div className="h-3 w-8 rounded bg-slate-700/60" />
+                </div>
+                <div className="flex items-baseline justify-between mt-3">
+                  <div className="h-5 w-16 rounded bg-slate-700/60" />
+                  <div className="h-3 w-12 rounded bg-slate-700/60" />
+                </div>
+                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-800/60">
+                  <div className="h-3 w-16 rounded bg-slate-700/60" />
+                  <div className="h-3 w-14 rounded bg-slate-700/60" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filteredBoards.map((b) => {
@@ -633,9 +656,14 @@ export const SectorHeatBoard: React.FC<{
                 </div>
 
                 <div className="flex items-baseline justify-between mt-2.5">
-                  <span className={`text-lg font-bold font-mono ${up ? 'text-red-400' : 'text-emerald-400'}`}>
-                    {up ? '+' : ''}{b.changePercent.toFixed(2)}%
-                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className={`text-lg font-bold font-mono ${up ? 'text-red-400' : 'text-emerald-400'}`}>
+                      {up ? '+' : ''}{b.changePercent.toFixed(2)}%
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      {b.price > 0 ? b.price.toFixed(2) : '--'}
+                    </span>
+                  </div>
                   <span className="text-[11px] font-mono text-slate-400">
                     {b.upCount}涨 / {b.downCount}跌
                   </span>
