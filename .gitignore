@@ -39,3 +39,8 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+
+# Local desktop build output
+api-tester/build/
+api-tester/dist/
+api-tester/*.spec
