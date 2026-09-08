@@ -88,7 +88,7 @@ export async function fetchSectorDetail(codeOrName: string): Promise<SectorDetai
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     const resp = await fetch(`https://qt.gtimg.cn/q=${fullCodes}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -294,94 +294,109 @@ export async function fetchSectorKline(sectorCode: string, period: KlinePeriod):
  * Core implementation fetching sector K-line by Eastmoney BK code (e.g. BK1492)
  */
 async function fetchSectorKlineByBkCode(bkCode: string, period: KlinePeriod): Promise<KlinePoint[]> {
-  try {
-    // Map periods to Eastmoney klt values.
-    // 90m is synthesized from 30m bars, 120m from 60m bars (same rule as individual stocks).
-    let klt = '101';
-    let lmt = 500;
-    if (period === '1m') { klt = '1'; lmt = 800; }
-    else if (period === '5m') { klt = '5'; lmt = 400; }
-    else if (period === '15m') { klt = '15'; lmt = 400; }
-    else if (period === '30m' || period === '90m') { klt = '30'; lmt = 400; }
-    else if (period === '60m' || period === '120m') { klt = '60'; lmt = 400; }
+  // Map periods to Eastmoney klt values.
+  let klt = '101';
+  let lmt = 500;
+  if (period === '1m') { klt = '1'; lmt = 800; }
+  else if (period === '5m') { klt = '5'; lmt = 400; }
+  else if (period === '15m') { klt = '15'; lmt = 400; }
+  else if (period === '30m' || period === '90m') { klt = '30'; lmt = 400; }
+  else if (period === '60m' || period === '120m') { klt = '60'; lmt = 400; }
 
-    const url =
-      `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${bkCode}` +
-      `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
-      `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
+  // ---- Primary: Eastmoney push2his (multiple mirror hosts) ----
+  const url =
+    `https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=90.${bkCode}` +
+    `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
+    `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
 
-    // push2his.eastmoney.com is intermittently rate-limited by Eastmoney.
-    // Prefer mirror hostnames (they're currently not limited), main host as last fallback.
-    const hosts = [
-      'push2his2.eastmoney.com',
-      'push2his3.eastmoney.com',
-      'push2his4.eastmoney.com',
-      'push2his.eastmoney.com',
-    ];
+  const hosts = [
+    'push2his2.eastmoney.com',
+    'push2his3.eastmoney.com',
+    'push2his4.eastmoney.com',
+    'push2his.eastmoney.com',
+  ];
 
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt < hosts.length; attempt++) {
-      try {
-        const attemptUrl = url.replace('push2his.eastmoney.com', hosts[attempt]);
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 5000);
-        const resp = await fetch(attemptUrl, {
-          signal: controller.signal,
-          // Connection: close avoids Eastmoney resetting Node's keep-alive sockets
-          headers: { 'User-Agent': 'Mozilla/5.0', Connection: 'close' },
-        });
-        clearTimeout(timer);
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < hosts.length; attempt++) {
+    try {
+      const attemptUrl = url.replace('push2his.eastmoney.com', hosts[attempt]);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      const resp = await fetch(attemptUrl, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+          Accept: '*/*',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+          Connection: 'close',
+        },
+      });
+      clearTimeout(timer);
 
-        if (resp.ok) {
-          const rawJson = await resp.json();
-          const list = rawJson?.data?.klines;
-          if (Array.isArray(list) && list.length > 0) {
-            // Cap the number of bars to keep chart rendering snappy
-            const cappedList = list.slice(-lmt);
-            let points: KlinePoint[] = cappedList.map((item: any) => {
-              // Format: "YYYY-MM-DD[,HH:mm],open,close,high,low,volume(手),amount(元)"
-              const parts = String(item).split(',');
-              const time = String(parts[0] || '');
-              const open = parseFloat(parts[1]) || 0;
-              const close = parseFloat(parts[2]) || 0;
-              const high = parseFloat(parts[3]) || Math.max(open, close);
-              const low = parseFloat(parts[4]) || Math.min(open, close);
-              const volume = (parseFloat(parts[5]) || 0) * 100;
-              const turnover = parseFloat(parts[6]) || 0;
-
-              return {
-                time,
-                open,
-                high,
-                low,
-                close,
-                volume,
-                turnover,
-              };
-            });
-
-            // Handle 90m / 120m synthesis from 30m / 60m source bars
-            if (period === '90m' || period === '120m') {
-              points = aggregateMinuteKline(points, period);
-            }
-
-            return points;
-          }
+      if (resp.ok) {
+        const rawJson = await resp.json();
+        const list = rawJson?.data?.klines;
+        if (Array.isArray(list) && list.length > 0) {
+          return parseEastmoneyKlines(list, lmt, period);
         }
-        lastError = new Error(`sector kline resp not ok: ${resp.status}`);
-      } catch (err) {
-        lastError = err;
-        // brief backoff before retrying next host
-        await new Promise((resolve) => setTimeout(resolve, 300));
       }
+      lastError = new Error(`sector kline resp not ok: ${resp.status}`);
+    } catch (err) {
+      lastError = err;
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
-
-    if (lastError) {
-      console.warn('fetchSectorKline error (all hosts):', lastError);
-    }
-  } catch (err) {
-    console.warn('fetchSectorKline error:', err);
   }
 
+  // ---- Fallback: Eastmoney push2 (non-historical, sometimes more stable) ----
+  try {
+    const altUrl =
+      `https://push2.eastmoney.com/api/qt/stock/kline/get?secid=90.${bkCode}` +
+      `&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57` +
+      `&klt=${klt}&fqt=1&beg=0&end=20500101&lmt=${lmt}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const resp = await fetch(altUrl, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        Accept: '*/*',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        Connection: 'close',
+      },
+    });
+    clearTimeout(timer);
+    if (resp.ok) {
+      const rawJson = await resp.json();
+      const list = rawJson?.data?.klines;
+      if (Array.isArray(list) && list.length > 0) {
+        return parseEastmoneyKlines(list, lmt, period);
+      }
+    }
+  } catch {
+    // ignore fallback error
+  }
+
+  if (lastError) {
+    console.warn('fetchSectorKline error (all hosts):', lastError);
+  }
   return [];
+}
+
+function parseEastmoneyKlines(list: string[], lmt: number, period: KlinePeriod): KlinePoint[] {
+  const cappedList = list.slice(-lmt);
+  let points: KlinePoint[] = cappedList.map((item: any) => {
+    const parts = String(item).split(',');
+    const time = String(parts[0] || '');
+    const open = parseFloat(parts[1]) || 0;
+    const close = parseFloat(parts[2]) || 0;
+    const high = parseFloat(parts[3]) || Math.max(open, close);
+    const low = parseFloat(parts[4]) || Math.min(open, close);
+    const volume = (parseFloat(parts[5]) || 0) * 100;
+    const turnover = parseFloat(parts[6]) || 0;
+    return { time, open, high, low, close, volume, turnover };
+  });
+  if (period === '90m' || period === '120m') {
+    points = aggregateMinuteKline(points, period);
+  }
+  return points;
 }

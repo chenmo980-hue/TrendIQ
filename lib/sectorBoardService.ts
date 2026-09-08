@@ -96,7 +96,7 @@ export async function fetchSectorBoards(
       const resp = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
           Referer: 'https://quote.eastmoney.com/center/boardlist.html',
           Connection: 'close',
         },
@@ -191,7 +191,7 @@ export async function fetchSectorBoardQuote(bkCode: string): Promise<StockQuote 
     const resp = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         Referer: 'https://quote.eastmoney.com/',
         Connection: 'close',
       },
@@ -263,7 +263,7 @@ export async function fetchSectorBoardConstituents(bkCode: string): Promise<Sect
     const resp = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         Referer: 'https://quote.eastmoney.com/',
         Connection: 'close',
       },

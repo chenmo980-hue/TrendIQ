@@ -60,7 +60,7 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
     const resp = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         Referer: 'https://quote.eastmoney.com/',
       },
     });
@@ -100,7 +100,7 @@ async function enrichStocksWithLiveQuotes(stocks: LimitUpStock[]): Promise<Limit
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     const resp = await fetch(`https://qt.gtimg.cn/q=${fullCodes}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -202,7 +202,7 @@ export async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
         const resp = await fetch(url, {
           signal: controller.signal,
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
             Referer: 'https://quote.eastmoney.com/ztb/',
           },
         });
@@ -285,6 +285,97 @@ export async function fetchLiveLimitUpPool(): Promise<LimitUpStock[]> {
   }
 }
 
+/**
+ * Fetch the real-time limit-down pool from Eastmoney's official 跌停池 API.
+ * Like the limit-up pool, walks back up to 7 days to find the most recent
+ * trading day with data (pre-market / non-trading days return an empty pool).
+ */
+export async function fetchLiveLimitDownPool(): Promise<LimitUpStock[]> {
+  try {
+    const bj = getBeijingDate();
+    const dateCandidates: string[] = [];
+    for (let offset = 0; offset < 8; offset++) {
+      const d = new Date(bj);
+      d.setDate(d.getDate() - offset);
+      dateCandidates.push(
+        String(d.getFullYear()) +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          String(d.getDate()).padStart(2, '0')
+      );
+    }
+
+    let lastError: unknown = null;
+    for (const dateStr of dateCandidates) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      try {
+        const url =
+          'https://push2ex.eastmoney.com/getTopicDTPool?ut=7eea3edcaed734bea9cbfc24409ed989&dpt=wz.ztzt&Pageindex=0&pagesize=120&sort=fund:asc&date=' +
+          dateStr;
+
+        const resp = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+            Referer: 'https://quote.eastmoney.com/ztb/',
+          },
+        });
+        clearTimeout(timer);
+
+        if (!resp.ok) {
+          lastError = new Error(`HTTP ${resp.status}`);
+          continue;
+        }
+
+        const json = await resp.json();
+        const pool = json?.data?.pool || [];
+        if (!Array.isArray(pool) || pool.length === 0) continue;
+
+        const result: LimitUpStock[] = [];
+        for (const item of pool) {
+          const code = String(item.c || '').padStart(6, '0');
+          if (!code) continue;
+          const norm = normalizeStockCode(code);
+          result.push({
+            code,
+            name: String(item.n || `标的${code}`),
+            market: norm.market,
+            fullCode: norm.fullCode,
+            price: parseFloat(item.p) || 0,
+            change: -(Math.abs(parseFloat(item.p) || 0) * 0.1),
+            changePercent: -10,
+            consecutiveBoards: 1,
+            boardText: '跌停',
+            sector: String(item.hybk || '未知板块').replace(/[ⅠⅡⅢ]/g, ''),
+            subConcepts: ['今日跌停'],
+            firstTime: '--:--:--',
+            lastTime: '--:--:--',
+            sealAmount: 0,
+            sealRatio: 0,
+            turnover: Math.round(parseFloat(item.amount) || 0),
+            turnoverRate: parseFloat(item.hs) || 0,
+            marketCap: parseFloat(item.ltsz) || 0,
+            reason: `${item.n || code} 今日跌停，市场情绪偏弱，注意风险。`,
+            dragonTigerType: '待核实',
+            netBuyAmount: 0,
+            isBroken: false,
+            openCount: 0,
+          });
+        }
+
+        return result;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    if (lastError) throw lastError;
+    return [];
+  } catch {
+    return [];
+  }
+}
+
 // Keep a dynamic market scan as an extra fallback (no real board counts).
 async function fetchDynamicMarketLimitUpPool(): Promise<LimitUpStock[]> {
   try {
@@ -297,7 +388,7 @@ async function fetchDynamicMarketLimitUpPool(): Promise<LimitUpStock[]> {
     const resp = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         Referer: 'https://quote.eastmoney.com/',
       },
     });
@@ -479,7 +570,20 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
   const totalCount = limitUpCount + brokenCount;
   const sealSuccessRate = totalCount > 0 ? +((limitUpCount / totalCount) * 100).toFixed(1) : staticSummary.sealSuccessRate;
   const maxBoards = Math.max(...finalStocks.map((s) => s.consecutiveBoards), 1);
-  const sentimentScore = Math.min(95, Math.max(60, Math.round(sealSuccessRate * 0.7 + maxBoards * 4)));
+
+  // Real-time limit-down pool (replaces the old hardcoded totalLimitDown: 2).
+  let liveLimitDown: LimitUpStock[] = [];
+  try {
+    liveLimitDown = await fetchLiveLimitDownPool();
+  } catch {
+    // ignore
+  }
+  const limitDownCount = liveLimitDown.length || staticSummary.totalLimitDown;
+
+  // Sentiment score: blend seal success rate, max board height, and breadth
+  // (limit-up vs limit-down). Higher = hotter ultra-short-term sentiment.
+  const breadthScore = limitDownCount === 0 ? 100 : Math.min(100, Math.round((limitUpCount / (limitUpCount + limitDownCount)) * 100));
+  const sentimentScore = Math.min(98, Math.max(40, Math.round(sealSuccessRate * 0.4 + maxBoards * 5 + breadthScore * 0.3)));
 
   // Compute ladder distribution from the real stock list (per consecutive board count)
   const liveLadder: Record<number, number> = {};
@@ -491,21 +595,26 @@ export async function getRealTimeLimitUpBoardData(): Promise<CacheData> {
 
   const topDragon = finalStocks.find((s) => s.consecutiveBoards === maxBoards) || finalStocks[0];
 
+  // Ultra-short-term sentiment phase (连板情绪周期): based on max board height,
+  // seal success rate and limit-down breadth.
+  let sentimentPhase: string;
+  if (maxBoards >= 6 && sealSuccessRate >= 55) sentimentPhase = '高潮期（高标空间持续拓宽，情绪亢奋）';
+  else if (maxBoards >= 4 && sealSuccessRate >= 45) sentimentPhase = '发酵期（题材多点开花，晋级率提升）';
+  else if (maxBoards >= 3) sentimentPhase = '修复期（情绪回暖，连板梯队逐步成形）';
+  else if (sealSuccessRate >= 60) sentimentPhase = '试错期（连板高度受限，首板轮动为主）';
+  else if (limitDownCount >= 20) sentimentPhase = '冰点期（跌停潮涌，亏钱效应明显，谨慎防守）';
+  else sentimentPhase = '混沌期（情绪反复，方向不明，多看少动）';
+
   const summary: LimitUpLadderSummary = {
     date: formatBeijingDateStr(getBeijingDate()),
     totalLimitUp: limitUpCount,
-    totalLimitDown: 2,
+    totalLimitDown: limitDownCount,
     brokenCount,
     sealSuccessRate,
     ladderDistribution,
     yesterdayLimitUpReturn: staticSummary.yesterdayLimitUpReturn,
     marketSentimentScore: sentimentScore,
-    sentimentPhase:
-      maxBoards >= 5
-        ? '主升共振发酵期（高标持续拓宽空间）'
-        : maxBoards >= 3
-        ? '中位晋级加速期（题材多点开花）'
-        : '首板试错与混沌期',
+    sentimentPhase,
     topDragonStock: topDragon ? `${topDragon.name} (${topDragon.boardText})` : usingFallback ? '暂无数据' : '暂无数据',
     maxConsecutiveBoards: maxBoards,
   };
@@ -537,7 +646,7 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
       {
         signal: controller.signal,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
           Referer: 'https://data.eastmoney.com/stock/lhb.html',
           Connection: 'close',
         },
@@ -562,7 +671,7 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
         `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSBUY&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BUY&sortTypes=-1&pageNumber=1&pageSize=500`,
         {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
             Referer: 'https://data.eastmoney.com/stock/lhb.html',
             Connection: 'close',
           },
@@ -572,7 +681,7 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
         `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_BILLBOARD_DAILYDETAILSSELL&columns=ALL&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=SELL&sortTypes=-1&pageNumber=1&pageSize=500`,
         {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
             Referer: 'https://data.eastmoney.com/stock/lhb.html',
             Connection: 'close',
           },
@@ -594,7 +703,7 @@ async function fetchLiveDragonTiger(): Promise<DragonTigerSeat[]> {
         `https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_DAILYBILLBOARD_DETAILS&columns=SECURITY_CODE,SECURITY_NAME_ABBR&filter=(TRADE_DATE%3D%27${latestDateStr}%27)&sortColumns=BILLBOARD_NET_AMT&sortTypes=-1&pageNumber=1&pageSize=300`,
         {
           headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
             Referer: 'https://data.eastmoney.com/stock/lhb.html',
             Connection: 'close',
           },

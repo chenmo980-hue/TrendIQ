@@ -68,9 +68,9 @@ class ApiTester(tk.Tk):
         content.add(right, weight=2)
         left.rowconfigure(2, weight=1)
         left.columnconfigure(0, weight=1)
-        ttk.Label(left, text="可用模型").grid(row=0, column=0, sticky="w")
+        ttk.Label(left, text="模型（可选择或手动输入）").grid(row=0, column=0, sticky="w")
         self.model_var = tk.StringVar()
-        self.model_combo = ttk.Combobox(left, textvariable=self.model_var, state="readonly")
+        self.model_combo = ttk.Combobox(left, textvariable=self.model_var, state="normal")
         self.model_combo.grid(row=1, column=0, sticky="ew", pady=(6, 12))
         self.model_list = scrolledtext.ScrolledText(left, height=10, state="disabled", wrap="word", font=("Consolas", 10))
         self.model_list.grid(row=2, column=0, sticky="nsew")
@@ -131,6 +131,12 @@ class ApiTester(tk.Tk):
         except json.JSONDecodeError:
             return raw
 
+    @staticmethod
+    def _status_text(status, body):
+        if isinstance(body, dict) and (body.get("error_code") == 1010 or body.get("error_name") == "browser_signature_banned"):
+            return "HTTP 403 · Cloudflare 1010：服务商封禁了客户端指纹"
+        return f"HTTP {status}"
+
     def _run_async(self, work):
         if self.busy:
             return
@@ -155,7 +161,7 @@ class ApiTester(tk.Tk):
     def send_message(self):
         model = self.model_var.get().strip()
         if not model:
-            messagebox.showwarning("缺少模型", "请先拉取模型并选择一个模型。")
+            messagebox.showwarning("缺少模型", "请选择一个模型，或直接输入模型 ID。")
             return
         text = self.message.get("1.0", "end").strip()
         if not text:
@@ -183,8 +189,17 @@ class ApiTester(tk.Tk):
             self._write_output(result)
         else:
             status, duration, body = result
-            self.status_var.set(f"HTTP {status} · {duration:.2f}s")
-            self._write_output(json.dumps(body, ensure_ascii=False, indent=2) if not isinstance(body, str) else body)
+            status_text = self._status_text(status, body)
+            self.status_var.set(f"{status_text} · {duration:.2f}s")
+            rendered = json.dumps(body, ensure_ascii=False, indent=2) if not isinstance(body, str) else body
+            if isinstance(body, dict) and (body.get("error_code") == 1010 or body.get("error_name") == "browser_signature_banned"):
+                rendered = (
+                    "诊断：这是服务商 Cloudflare 的 Error 1010。\n"
+                    "原因：服务商按客户端指纹拒绝了请求，不是模型名称或消息格式错误。\n"
+                    "处理：不要重复重试；请联系 API 服务商解除封禁，或改用服务商提供的官方 API 域名/入口。\n\n"
+                    + rendered
+                )
+            self._write_output(rendered)
             if isinstance(body, dict) and isinstance(body.get("data"), list):
                 self.models = [item.get("id") for item in body["data"] if isinstance(item, dict) and item.get("id")]
                 self.model_combo["values"] = self.models

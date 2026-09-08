@@ -165,8 +165,12 @@ export const SectorHeatBoard: React.FC<{
           if (!silent) setKlineError(`K线加载失败 (HTTP ${kResp.status})`);
         } else {
           const kData = await kResp.json();
-          setKlineData(kData.klineData || []);
+          const kline = kData.klineData || [];
+          setKlineData(kline);
           setDetailQuote(kData.quote || null);
+          if (kline.length === 0 && !silent) {
+            setKlineError('K线数据为空，请重试');
+          }
         }
 
         // Load constituents via the board detail endpoint

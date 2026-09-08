@@ -1,0 +1,22 @@
+[
+  {
+    "Model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "Round": 1,
+    "Prompt_Tokens": 0,
+    "Output_Tokens": 0,
+    "Total_ms": 306,
+    "TPS": 0,
+    "Finish": "",
+    "ErrMsg": "Response status code does not indicate success: 502 (Bad Gateway)."
+  },
+  {
+    "Model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "Round": 2,
+    "Prompt_Tokens": 0,
+    "Output_Tokens": 0,
+    "Total_ms": 130,
+    "TPS": 0,
+    "Finish": "",
+    "ErrMsg": "Response status code does not indicate success: 502 (Bad Gateway)."
+  }
+]

@@ -136,13 +136,17 @@ export function normalizeStockCode(input: string): NormalizedStock {
     market = 'bj';
     rawCode = rawCode.slice(0, -3);
   } else {
+    // 0. Known indices (000001, 399001, etc.) - check first to avoid ambiguity
+    if (KNOWN_INDICES[rawCode]) {
+      market = KNOWN_INDICES[rawCode].market;
+    }
     // 1. Shanghai Market Rules:
     // - 600xxx, 601xxx, 603xxx, 605xxx: Shanghai Main A
     // - 688xxx, 689xxx: Shanghai STAR (科创板)
     // - 50xxxx, 51xxxx, 52xxxx, 56xxxx, 58xxxx: Shanghai ETF / LOF / Funds (e.g. 510300, 501018, 588000)
     // - 11xxxx: Shanghai Convertible Bonds (e.g. 113050)
     // - 900xxx: Shanghai B-shares
-    if (/^(600|601|603|605|688|689|50|51|52|56|58|110|111|113|118|900)/.test(rawCode)) {
+    else if (/^(600|601|603|605|688|689|50|51|52|56|58|110|111|113|118|900)/.test(rawCode)) {
       market = 'sh';
     } 
     // 2. Shenzhen Market Rules:
@@ -161,13 +165,6 @@ export function normalizeStockCode(input: string): NormalizedStock {
     // - 43xxxx, 83xxxx, 87xxxx, 920xxx: Beijing Stock Exchange
     else if (/^(43|83|87|920)/.test(rawCode)) {
       market = 'bj';
-    } else if (rawCode === '000001' && (clean.includes('sh') || clean.includes('指') || clean.includes('上证'))) {
-      market = 'sh';
-    } else if (rawCode === '000001') {
-      // Default 000001 without prefix: if labeled as Ping An Bank (sz) or SSE (sh)
-      market = 'sz'; // Ping An Bank default, SSE is sh000001
-    } else if (KNOWN_INDICES[rawCode]) {
-      market = KNOWN_INDICES[rawCode].market;
     }
   }
 

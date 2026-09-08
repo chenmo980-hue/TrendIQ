@@ -37,7 +37,7 @@ export async function fetchFuturesQuote(symbol: string): Promise<{ quote: StockQ
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     const resp = await fetch(`https://hq.sinajs.cn/list=${sinaParam}`, {
-      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
       signal: controller.signal,
     });
     clearTimeout(timer);
@@ -226,7 +226,7 @@ export async function fetchFuturesKline(symbol: string, period: KlinePeriod): Pr
     }
 
     const resp = await fetch(klineUrl, {
-      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' },
+      headers: { Referer: 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36' },
       signal: controller.signal,
     });
     clearTimeout(timer);

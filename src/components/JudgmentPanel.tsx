@@ -104,10 +104,18 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
         `协同策略：${aiAnalysis.sectorSynergy.synergyTips}`
       : '';
 
+    const sentimentText = aiAnalysis.marketSentiment
+      ? `\n\n4.5 市场超短线情绪温度计：\n【${aiAnalysis.marketSentiment.sentimentPhase}】 情绪温度 ${aiAnalysis.marketSentiment.marketSentimentScore} 分\n` +
+        `涨停 ${aiAnalysis.marketSentiment.totalLimitUp} 家 / 跌停 ${aiAnalysis.marketSentiment.totalLimitDown} 家 / 炸板 ${aiAnalysis.marketSentiment.brokenCount} 家 / 封板成功率 ${aiAnalysis.marketSentiment.sealSuccessRate}%\n` +
+        `最高连板 ${aiAnalysis.marketSentiment.maxConsecutiveBoards} 板（空间龙：${aiAnalysis.marketSentiment.topDragonStock}）\n` +
+        (aiAnalysis.marketSentiment.analysisText ? `${aiAnalysis.marketSentiment.analysisText}\n` : '')
+      : '';
+
     const text = `【${quote?.name} (${quote?.code}) AI 资深技术研判】\n\n` +
       `1. 趋势研判与结构演变：\n${aiAnalysis.trendAssessment}\n\n` +
       `2. 量价关系与资金动能：\n${aiAnalysis.volumePriceAnalysis}\n\n` +
       `3. 指标多维共振信号：\n${aiAnalysis.indicatorResonance}` +
+      sentimentText +
       sectorText +
       `\n\n5. 关键位置攻防与策略：\n${aiAnalysis.keyLevels}\n\n` +
       `风险提示：\n${aiAnalysis.riskNotice}`;
@@ -250,6 +258,50 @@ export const JudgmentPanel: React.FC<JudgmentPanelProps> = ({
               </div>
               <p className="text-slate-300 leading-relaxed text-[11px]">{aiAnalysis.indicatorResonance}</p>
             </div>
+
+            {aiAnalysis.marketSentiment && (
+              <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-1.5">
+                  <div className="font-bold text-rose-400 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    <span>4. 市场超短线情绪温度计</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${(aiAnalysis.marketSentiment.marketSentimentScore || 0) >= 65 ? 'bg-rose-950/40 text-rose-400 border border-rose-800/40' : (aiAnalysis.marketSentiment.marketSentimentScore || 0) <= 45 ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' : 'bg-amber-950/40 text-amber-300 border border-amber-800/40'}`}>
+                      情绪温度 {aiAnalysis.marketSentiment.marketSentimentScore}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-800/80 text-slate-300 border border-slate-700">
+                      {aiAnalysis.marketSentiment.sentimentPhase}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div className="p-1.5 rounded bg-[#1a2530] border border-[#2a3848]">
+                    <div className="text-[9px] text-slate-400">涨停</div>
+                    <div className="text-xs font-bold text-rose-400">{aiAnalysis.marketSentiment.totalLimitUp}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-[#1a2530] border border-[#2a3848]">
+                    <div className="text-[9px] text-slate-400">跌停</div>
+                    <div className="text-xs font-bold text-emerald-400">{aiAnalysis.marketSentiment.totalLimitDown}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-[#1a2530] border border-[#2a3848]">
+                    <div className="text-[9px] text-slate-400">炸板/封板率</div>
+                    <div className="text-xs font-bold text-amber-300">
+                      {aiAnalysis.marketSentiment.brokenCount} / {aiAnalysis.marketSentiment.sealSuccessRate}%
+                    </div>
+                  </div>
+                  <div className="p-1.5 rounded bg-[#1a2530] border border-[#2a3848]">
+                    <div className="text-[9px] text-slate-400">最高连板</div>
+                    <div className="text-xs font-bold text-white">{aiAnalysis.marketSentiment.maxConsecutiveBoards} 板</div>
+                  </div>
+                </div>
+
+                <p className="text-slate-300 leading-relaxed text-[11px]">
+                  {aiAnalysis.marketSentiment.analysisText || `空间龙：${aiAnalysis.marketSentiment.topDragonStock}，市场情绪处于【${aiAnalysis.marketSentiment.sentimentPhase}】。`}
+                </p>
+              </div>
+            )}
 
             {aiAnalysis.sectorSynergy && (
               <div className="bg-[#121922] p-3 rounded border border-[#1c2734] space-y-2">

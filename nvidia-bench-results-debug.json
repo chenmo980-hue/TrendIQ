@@ -1,0 +1,29 @@
+[
+  {
+    "Model": "nvidia/nemotron-3-super-120b-a12b",
+    "Round": 1,
+    "TTFT_ms": 0,
+    "Total_ms": 321,
+    "Tokens": 0,
+    "TPS": 0.0,
+    "ErrMsg": "Response status code does not indicate success: 502 (Bad Gateway)."
+  },
+  {
+    "Model": "nvidia/nemotron-3-super-120b-a12b",
+    "Round": 2,
+    "TTFT_ms": 0,
+    "Total_ms": 164,
+    "Tokens": 0,
+    "TPS": 0.0,
+    "ErrMsg": "Response status code does not indicate success: 502 (Bad Gateway)."
+  },
+  {
+    "Model": "nvidia/nemotron-3-super-120b-a12b",
+    "Round": 3,
+    "TTFT_ms": 0,
+    "Total_ms": 135,
+    "Tokens": 0,
+    "TPS": 0.0,
+    "ErrMsg": "Response status code does not indicate success: 502 (Bad Gateway)."
+  }
+]

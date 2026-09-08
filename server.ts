@@ -1,7 +1,12 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { normalizeStockCode } from './lib/stockCode';
+
+const __filename = fileURLToPath(import.meta.url);
+const PROJECT_ROOT = path.resolve(path.dirname(__filename));
 import { fetchMarketContext } from './lib/marketContext';
 import { PRESET_DATABASE, generateMockKline, STOCK_PRICE_MAP, formatBeijingDateStr, getBeijingDate, isTradingDay } from './lib/sampleData';
 import { aggregateMinuteKline } from './lib/aggregateMinuteKline';
@@ -16,6 +21,28 @@ import { fetchSectorBoards, fetchSectorBoardDetail } from './lib/sectorBoardServ
 import { FUTURES_DATABASE, resolveFutureItem } from './lib/futuresData';
 import { SECTOR_DATABASE } from './lib/sectorCatalog';
 import type { KlinePoint, StockQuote, StockSearchResult, KlinePeriod } from './src/types';
+
+// Load .env into process.env. The server runs as a standalone tsx/node process
+// so Vite's env loading does NOT apply here — without this, GEMINI_API_KEY was
+// never read and the AI analysis silently always used the offline template engine.
+try {
+  const envPath = path.join(process.cwd(), '.env');
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf8');
+    for (const line of envContent.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+      const idx = trimmed.indexOf('=');
+      const key = trimmed.slice(0, idx).trim();
+      const value = trimmed.slice(idx + 1).trim().replace(/^["']|["']$/g, '');
+      if (key && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+  }
+} catch {
+  // .env missing is fine (offline mode)
+}
 
 /**
  * Safely decodes GBK/GB18030/GB2312 or UTF-8 HTTP response streams
@@ -758,6 +785,53 @@ async function startServer() {
     const catalyst = matchedSector?.catalyst || '行业景气度持续改善，受主力机构高度关注。';
     const relativeDiff = (stock.changePercent || 0) - sectorChg;
 
+    // Real-time ultra-short-term market sentiment snapshot (涨停/跌停家数、
+    // 连板高度、空间龙、炸板率、情绪阶段) — inject into both the Gemini prompt
+    // and the offline template so the AI interpretation extends from technical
+    // analysis into 超短线连板情绪逻辑.
+    let sentimentCtx = {
+      totalLimitUp: 0,
+      totalLimitDown: 0,
+      brokenCount: 0,
+      sealSuccessRate: 0,
+      maxConsecutiveBoards: 0,
+      topDragonStock: '暂无',
+      sentimentPhase: '情绪数据获取中',
+      marketSentimentScore: 50,
+      ladderDistribution: {} as Record<number, number>,
+    };
+    try {
+      const boardData = await getRealTimeLimitUpBoardData();
+      const s = boardData.summary;
+      sentimentCtx = {
+        totalLimitUp: s.totalLimitUp,
+        totalLimitDown: s.totalLimitDown,
+        brokenCount: s.brokenCount,
+        sealSuccessRate: s.sealSuccessRate,
+        maxConsecutiveBoards: s.maxConsecutiveBoards || 0,
+        topDragonStock: s.topDragonStock || '暂无',
+        sentimentPhase: s.sentimentPhase,
+        marketSentimentScore: s.marketSentimentScore || 50,
+        ladderDistribution: s.ladderDistribution || {},
+      };
+    } catch {
+      // keep defaults
+    }
+
+    // Build a human-readable sentiment temperature paragraph.
+    const ladderText = Object.keys(sentimentCtx.ladderDistribution).length
+      ? Object.entries(sentimentCtx.ladderDistribution)
+          .sort((a, b) => Number(b[0]) - Number(a[0]))
+          .map(([board, cnt]) => `${board}连板×${cnt}家`)
+          .join('、')
+      : '';
+    const sentimentLine =
+      `今日涨停 ${sentimentCtx.totalLimitUp} 家 / 跌停 ${sentimentCtx.totalLimitDown} 家，` +
+      `最高连板 ${sentimentCtx.maxConsecutiveBoards} 板（空间龙：${sentimentCtx.topDragonStock}），` +
+      `炸板 ${sentimentCtx.brokenCount} 家、封板成功率 ${sentimentCtx.sealSuccessRate}%。` +
+      (ladderText ? ` 连板梯队：${ladderText}。` : '') +
+      ` 市场情绪阶段：【${sentimentCtx.sentimentPhase}】，情绪温度 ${sentimentCtx.marketSentimentScore} 分。`;
+
     let defaultRelativeStrength: '超额强势领涨' | '主升共振' | '滞涨分化' | '逆势独立' | '跟随调整' = '主升共振';
     if (relativeDiff >= 2.0 && (stock.changePercent || 0) > 0) defaultRelativeStrength = '超额强势领涨';
     else if ((stock.changePercent || 0) > 0 && sectorChg < -0.5) defaultRelativeStrength = '逆势独立';
@@ -791,6 +865,14 @@ async function startServer() {
 
 【大盘环境】
 ${JSON.stringify(marketContext || [], null, 2)}
+
+【市场超短线情绪温度计】(基于今日实时涨停/跌停池)
+${sentimentLine}
+
+请额外从 A股超短线情绪与连板逻辑角度进行延伸研判：
+- 结合当前涨停家数、跌停家数、最高连板高度、空间龙与连板梯队结构，判断市场情绪所处周期（冰点/修复/发酵/高潮/分歧/退潮）；
+- 分析当前情绪周期对持仓标的短线走势的映射：情绪强则题材主线与高标溢价扩张，情绪弱则警惕高标核按钮、分歧加剧与补跌风险；
+- 在 trendAssessment 中给出"技术面 + 超短线情绪共振"的复合研判，在 riskNotice 中结合情绪周期提示对应的仓位与防守纪律。
 
 【技术指标快照】
 - 均线系统 (MA): ${JSON.stringify(indicators?.maSummary || 'MA5/10/20多周期')}
@@ -872,6 +954,17 @@ ${JSON.stringify(marketContext || [], null, 2)}
 
       res.json({
         ...parsed,
+        marketSentiment: {
+          totalLimitUp: sentimentCtx.totalLimitUp,
+          totalLimitDown: sentimentCtx.totalLimitDown,
+          brokenCount: sentimentCtx.brokenCount,
+          sealSuccessRate: sentimentCtx.sealSuccessRate,
+          maxConsecutiveBoards: sentimentCtx.maxConsecutiveBoards,
+          topDragonStock: sentimentCtx.topDragonStock,
+          sentimentPhase: sentimentCtx.sentimentPhase,
+          marketSentimentScore: sentimentCtx.marketSentimentScore,
+          analysisText: sentimentLine,
+        },
         source: 'gemini',
         generatedAt: new Date().toLocaleTimeString('zh-CN'),
       });
@@ -885,10 +978,38 @@ ${JSON.stringify(marketContext || [], null, 2)}
       const supStr = judgment?.supportLevels?.length ? `¥${judgment.supportLevels.join(' / ¥')}` : '近期前低附近';
       const resStr = judgment?.resistanceLevels?.length ? `¥${judgment.resistanceLevels.join(' / ¥')}` : '前期密集套牢区';
 
+      // ---- Ultra-short-term sentiment logic (offline template extension) ----
+      const sc = sentimentCtx;
+      const phase = sc.sentimentPhase || '';
+      const hotSentiment = /高潮|亢奋/.test(phase) || sc.marketSentimentScore >= 75;
+      const coldSentiment = /冰点|退潮|低迷/.test(phase) || sc.marketSentimentScore <= 45;
+      const highBoard = sc.maxConsecutiveBoards >= 4;
+      const sentimentTrendText = coldSentiment
+        ? `当前市场情绪处于【${sc.sentimentPhase}】（情绪温度 ${sc.marketSentimentScore} 分），涨停${sc.totalLimitUp}家 / 跌停${sc.totalLimitDown}家，亏钱效应显著，题材持续性差，超短线宜降低预期、空仓或轻仓防守，等待情绪冰点转折信号。`
+        : hotSentiment
+        ? `当前市场情绪处于【${sc.sentimentPhase}】（情绪温度 ${sc.marketSentimentScore} 分），涨停${sc.totalLimitUp}家 / 跌停${sc.totalLimitDown}家，空间龙${sc.topDragonStock}拓展至${sc.maxConsecutiveBoards}连板，赚钱效应显著，主线题材具备持续性溢价，超短线可顺势博弈龙头与强势补涨。`
+        : `当前市场情绪处于【${sc.sentimentPhase}】（情绪温度 ${sc.marketSentimentScore} 分），涨停${sc.totalLimitUp}家 / 跌停${sc.totalLimitDown}家，连板梯队轮动为主，题材分歧反复，超短线宜聚焦核心主线、控制仓位快进快出。`;
+      const sentimentRiskText = coldSentiment
+        ? `当前情绪处于${sc.sentimentPhase}，务必防范高标补跌与连板核按钮风险，跌停${sc.totalLimitDown}家显示抛压沉重，短线开仓需以轻仓试探、严格止损为前提；`
+        : hotSentiment
+        ? `当前情绪处于${sc.sentimentPhase}，需防范高位放量分歧与退潮风险，谨防空间龙断板引发板块补跌，追高需谨慎、盈利宜及时兑现；`
+        : `当前情绪处于${sc.sentimentPhase}，需防范题材轮动过快造成的追涨杀跌损耗，操作上降低频率、聚焦核心主线，以龙头分歧低吸为主；`;
+
       res.json({
         trendAssessment: `${stock.name} (${stock.fullCode || stock.code}) 当前技术评分 ${judgment?.score || 65} 分，处于【${judgment?.direction || '中性蓄势'}】阶段。${maSig}，中短期需重点关注生命线位置的支撑与突破有效性。`,
         volumePriceAnalysis: `今日现价 ¥${stock.price} (涨跌幅 ${stock.changePercent > 0 ? '+' : ''}${stock.changePercent}%)，成交量 ${stock.volume || '放量/缩量'} 配合。价格在 ¥${stock.low} - ¥${stock.high} 区间内进行多空博弈，量能暂未出现极端背离。`,
         indicatorResonance: `指标共振状态：${macdSig}；${kdjSig}。多周期指标目前处于局部技术修正，需防范震荡中的假突破诱多/诱空行为。`,
+        marketSentiment: {
+          totalLimitUp: sc.totalLimitUp,
+          totalLimitDown: sc.totalLimitDown,
+          brokenCount: sc.brokenCount,
+          sealSuccessRate: sc.sealSuccessRate,
+          maxConsecutiveBoards: sc.maxConsecutiveBoards,
+          topDragonStock: sc.topDragonStock,
+          sentimentPhase: sc.sentimentPhase,
+          marketSentimentScore: sc.marketSentimentScore,
+          analysisText: sentimentTrendText,
+        },
         sectorSynergy: {
           sectorName,
           sectorCategory,
@@ -900,7 +1021,7 @@ ${JSON.stringify(marketContext || [], null, 2)}
           synergyTips: `板块联动操盘策略：当前板块处于【${defaultCycleStage}】。若板块指数持续放量上攻，标的有望充分享受主线估值溢价；若板块分歧加大，需密切关注龙头股 ${leaderName} 的承接力度以决定个股仓位防守。`,
         },
         keyLevels: `关键攻防位置：下方第一道核心支撑参考 ${supStr}，上方短线重要阻力参考 ${resStr}。在突破阻力或跌破支撑前建议以区间网格思路应对。`,
-        riskNotice: `免责声明与风险警示：本分析由本地高精度量化规则引擎与技术形态算法自动生成。证券市场具有不确定性，技术指标仅供参考，不构成任何投资建议。`,
+        riskNotice: `免责声明与风险警示：本分析由本地高精度量化规则引擎与技术形态算法自动生成。证券市场具有不确定性，技术指标仅供参考，不构成任何投资建议。${sentimentRiskText}`,
         confidenceScore: 85,
         source: 'offline-engine',
         notice: '（本地环境未配置云端大模型或直连受限，已无缝启用本地量化引擎解读）',
@@ -1021,7 +1142,7 @@ ${JSON.stringify(marketContext || [], null, 2)}
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    const distPath = path.join(PROJECT_ROOT, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

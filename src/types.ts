@@ -191,11 +191,24 @@ export interface SectorSynergyInfo {
   synergyTips: string;
 }
 
+export interface MarketSentimentInfo {
+  totalLimitUp: number;
+  totalLimitDown: number;
+  brokenCount: number;
+  sealSuccessRate: number;
+  maxConsecutiveBoards: number;
+  topDragonStock: string;
+  sentimentPhase: string;
+  marketSentimentScore: number;
+  analysisText?: string;
+}
+
 export interface AIAnalysisResponse {
   trendAssessment: string;
   volumePriceAnalysis: string;
   indicatorResonance: string;
   sectorSynergy?: SectorSynergyInfo;
+  marketSentiment?: MarketSentimentInfo;
   keyLevels: string;
   riskNotice: string;
   confidenceScore: number;
