@@ -1,0 +1,21 @@
+<Window x:Class="TrendIQDownloader.ToolsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="工具管理" Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#1E1F24">
+    <StackPanel Margin="16">
+        <TextBlock x:Name="StatusText" Foreground="#C8C8C8" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="BtnEnsure" Content="检查/下载工具" Background="#4F8CFF" Click="OnEnsure" Margin="0,0,8,0"/>
+            <Button x:Name="BtnForce" Content="强制重新下载" Click="OnForce" Margin="0,0,8,0"/>
+            <Button x:Name="BtnUpdate" Content="更新 yt-dlp" Background="#3DD68C" Click="OnUpdate" Margin="0,0,8,0"/>
+            <Button Content="关闭" Click="OnClose"/>
+        </StackPanel>
+
+        <ProgressBar x:Name="Prog" Height="6" Margin="0,12,0,0" Background="#1A1B1F"
+                     Foreground="#4F8CFF" BorderThickness="0" Maximum="100"/>
+        <TextBlock x:Name="ProgText" Foreground="#9A9AA3" FontSize="11" Margin="0,4,0,0"/>
+    </StackPanel>
+</Window>

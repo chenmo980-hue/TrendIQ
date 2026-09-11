@@ -44,3 +44,9 @@ dist-ssr/
 api-tester/build/
 api-tester/dist/
 api-tester/*.spec
+
+# VideoDownloader build artifacts
+VideoDownloader/bin/
+VideoDownloader/obj/
+*.user
+smoke-result.txt

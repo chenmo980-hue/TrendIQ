@@ -1,0 +1,31 @@
+<Window x:Class="TrendIQDownloader.SettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="设置" Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
+        Background="#1E1F24">
+    <StackPanel Margin="16">
+        <TextBlock Text="代理 (http://host:port，留空直连)" Foreground="#9A9AA3" FontSize="12" Margin="0,0,0,4"/>
+        <TextBox x:Name="ProxyBox" Margin="0,0,0,12"/>
+
+        <TextBlock Text="Cookies 文件 (可选，用于需要登录的站点，如 YouTube 会员)" Foreground="#9A9AA3" FontSize="12" Margin="0,0,0,4"/>
+        <DockPanel Margin="0,0,0,12">
+            <Button DockPanel.Dock="Right" Content="浏览..." Click="OnBrowseCookie" Margin="8,0,0,0"/>
+            <TextBox x:Name="CookieBox"/>
+        </DockPanel>
+
+        <TextBlock Text="字幕语言 (逗号分隔，如 zh,en,ja)" Foreground="#9A9AA3" FontSize="12" Margin="0,0,0,4"/>
+        <TextBox x:Name="SubLangBox" Margin="0,0,0,12"/>
+
+        <TextBlock Text="下载目录" Foreground="#9A9AA3" FontSize="12" Margin="0,0,0,4"/>
+        <DockPanel Margin="0,0,0,16">
+            <Button DockPanel.Dock="Right" Content="浏览..." Click="OnBrowseOutput" Margin="8,0,0,0"/>
+            <TextBox x:Name="OutputBox"/>
+        </DockPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="保存" Background="#4F8CFF" Width="90" Click="OnSave"/>
+            <Button Content="取消" Margin="8,0,0,0" Width="90" Click="OnClose"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
