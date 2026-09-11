@@ -1,30 +1,44 @@
 <Window x:Class="TrendIQDownloader.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="TrendIQ Downloader" Height="760" Width="1080"
-        MinHeight="640" MinWidth="900"
+        Title="TrendIQ Downloader" Height="780" Width="1120"
+        MinHeight="660" MinWidth="940"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1F24">
+        FontFamily="Microsoft YaHei UI"
+        TextOptions.TextRenderingMode="ClearType"
+        Background="#17181C">
     <Window.Resources>
+        <SolidColorBrush x:Key="CardBg" Color="#22242A"/>
+        <SolidColorBrush x:Key="CardBorder" Color="#2E3138"/>
+        <SolidColorBrush x:Key="InputBg" Color="#262932"/>
+        <SolidColorBrush x:Key="Accent" Color="#6C8CFF"/>
+        <SolidColorBrush x:Key="Green" Color="#3DD68C"/>
+        <SolidColorBrush x:Key="Danger" Color="#E06C6C"/>
+        <SolidColorBrush x:Key="TextMain" Color="#ECEDEF"/>
+        <SolidColorBrush x:Key="TextSub" Color="#9AA0A8"/>
+        <SolidColorBrush x:Key="TextFaint" Color="#5C6169"/>
+
         <Style TargetType="Button">
-            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Padding" Value="14,8"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Background" Value="#3A3F4B"/>
+            <Setter Property="Foreground" Value="#E8EAED"/>
+            <Setter Property="Background" Value="#31343C"/>
             <Setter Property="FontSize" Value="13"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="#3A3E46" BorderThickness="1"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.85"/>
+                                <Setter TargetName="bd" Property="Background" Value="#3B3F48"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                                <Setter TargetName="bd" Property="Opacity" Value="0.35"/>
                                 <Setter Property="Cursor" Value="Arrow"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
@@ -32,211 +46,364 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="BtnPrimary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#6C8CFF"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#6C8CFF" Offset="0"/>
+                                    <GradientStop Color="#8B6CFF" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.88"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.3"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BtnGreen" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#2FB377"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="8" Background="#2FB377" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#37C685"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.3"/>
+                                <Setter Property="Cursor" Value="Arrow"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="BtnGhost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource TextSub}"/>
+        </Style>
+
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="#2B2D33"/>
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="BorderBrush" Value="#3A3F4B"/>
+            <Setter Property="Background" Value="{StaticResource InputBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="6,5"/>
+            <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FontSize" Value="13"/>
+            <Setter Property="CaretBrush" Value="{StaticResource TextMain}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#C6CAD1"/>
+            <Setter Property="FontSize" Value="12.5"/>
+        </Style>
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#2B2D33"/>
-            <Setter Property="Foreground" Value="#E8E8E8"/>
-            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMain}"/>
+            <Setter Property="FontSize" Value="12.5"/>
             <Setter Property="Padding" Value="8,6"/>
         </Style>
-        <Style TargetType="CheckBox">
-            <Setter Property="Foreground" Value="#C8C8C8"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#C8C8C8"/>
+            <Setter Property="Foreground" Value="#C6CAD1"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
-        <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#9A9AA3"/>
-            <Setter Property="FontSize" Value="12"/>
-        </Style>
-        <Style x:Key="Title" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="FontSize" Value="15"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+
+        <Style TargetType="ProgressBar">
+            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="Background" Value="#1B1D22"/>
+            <Setter Property="Height" Value="8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Grid Background="Transparent" ClipToBounds="True">
+                            <Border CornerRadius="4" Background="{TemplateBinding Background}"/>
+                            <Border x:Name="PART_Indicator" CornerRadius="4"
+                                    Background="{TemplateBinding Foreground}" HorizontalAlignment="Left"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
-    <Grid Margin="16">
+    <Grid Margin="20,16,20,16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- 顶栏：链接输入 -->
-        <Grid Grid.Row="0">
+        <!-- 标题栏 -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" x:Name="UrlBox" Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
-                     KeyDown="UrlBox_KeyDown" FontSize="14" Padding="8,7"
-                     Tag="粘贴视频或播放列表链接 (支持 YouTube/B站/抖音等数千站点)"/>
-        </Grid>
-        <Grid Grid.Row="0" Grid.Column="1" Margin="8,0,0,0">
-            <Button Content="解析" Background="#4F8CFF" Click="OnParse" IsEnabled="{Binding NotBusy}"/>
-        </Grid>
-        <Grid Grid.Row="0" Grid.Column="2" Margin="8,0,0,0">
-            <Button Content="工具/更新" Click="OnTools" IsEnabled="{Binding NotBusy}"/>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,10,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#6C8CFF" Offset="0"/>
+                            <GradientStop Color="#8B6CFF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="T" FontSize="17" FontWeight="Bold" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <TextBlock Text="TrendIQ Downloader" FontSize="17" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextMain}" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1" Text="支持 YouTube / B站 / 抖音 等 1000+ 站点"
+                       Foreground="{StaticResource TextFaint}" FontSize="12"
+                       VerticalAlignment="Center" Margin="14,2,0,0"/>
+            <Border Grid.Column="2" CornerRadius="10" Background="#26282E" Padding="10,4">
+                <TextBlock x:Name="VersionChip" Text="{Binding YtDlpVersion}" FontSize="11.5"
+                           Foreground="{StaticResource TextSub}"/>
+            </Border>
         </Grid>
 
+        <!-- 链接输入区 -->
+        <Border Grid.Row="1" CornerRadius="12" Background="{StaticResource CardBg}"
+                BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Padding="10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Content="粘贴链接" Click="OnPaste" FontSize="12.5"
+                        Padding="12,8" Margin="0,0,8,0"/>
+
+                <Grid Grid.Column="1" MouseLeftButtonDown="OnUrlAreaClick">
+                    <TextBox x:Name="UrlBox" Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
+                             KeyDown="UrlBox_KeyDown" FontSize="13.5" Padding="10,9"
+                             Background="Transparent" BorderThickness="0" VerticalContentAlignment="Center"/>
+                    <TextBlock Text="① 在这里粘贴视频链接，然后点「解析」（支持 YouTube / B站 / 抖音 ...）"
+                               Foreground="{StaticResource TextFaint}" FontSize="13.5"
+                               VerticalAlignment="Center" Margin="12,0,0,0" IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Url}" Value="">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+
+                <Button Grid.Column="2" Content="解 析" Style="{StaticResource BtnPrimary}"
+                        Click="OnParse" IsEnabled="{Binding NotBusy}" FontSize="13.5"
+                        Padding="22,9" Margin="8,0,0,0"/>
+                <Button Grid.Column="3" Content="工具/更新" Click="OnTools"
+                        IsEnabled="{Binding NotBusy}" FontSize="12.5" Padding="12,8" Margin="8,0,0,0"/>
+            </Grid>
+        </Border>
+
         <!-- 视频信息卡 -->
-        <Border Grid.Row="1" Margin="0,12" Padding="12" Background="#26272C" CornerRadius="6"
+        <Border Grid.Row="2" Margin="0,12" Padding="14" CornerRadius="12"
+                Background="{StaticResource CardBg}"
+                BorderBrush="{StaticResource CardBorder}" BorderThickness="1"
                 Visibility="{Binding InfoVisibility}">
             <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="160"/>
+                        <ColumnDefinition Width="176"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <Image Grid.Column="0" x:Name="ThumbImage" Width="160" Height="90" Stretch="UniformToFill"
-                           Source="{Binding ThumbnailImage}" Cursor="Hand" MouseLeftButtonDown="OnThumbClick"/>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Style="{StaticResource Title}" Text="{Binding Title}"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Style="{StaticResource Label}" Text="{Binding Uploader}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="  ·  " />
-                            <TextBlock Style="{StaticResource Label}" Text="{Binding DurationText}"/>
-                            <TextBlock Style="{StaticResource Label}" Text="  ·  " />
-                            <TextBlock Style="{StaticResource Label}" Text="{Binding Site}"/>
+                    <Border Grid.Column="0" Width="176" Height="99" CornerRadius="8"
+                            Background="#1B1D22" ClipToBounds="True">
+                        <Image x:Name="ThumbImage" Stretch="UniformToFill"
+                               Source="{Binding ThumbnailImage}" Cursor="Hand"
+                               MouseLeftButtonDown="OnThumbClick"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontSize="15.5" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextMain}" TextTrimming="CharacterEllipsis"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            <TextBlock Text="{Binding Uploader}" Foreground="{StaticResource TextSub}" FontSize="12.5"/>
+                            <TextBlock Text="  ·  " Foreground="{StaticResource TextFaint}" FontSize="12.5"/>
+                            <TextBlock Text="{Binding DurationText}" Foreground="{StaticResource TextSub}" FontSize="12.5"/>
+                            <TextBlock Text="  ·  " Foreground="{StaticResource TextFaint}" FontSize="12.5"/>
+                            <TextBlock Text="{Binding Site}" Foreground="{StaticResource TextSub}" FontSize="12.5"/>
                         </StackPanel>
+                        <TextBlock Text="② 选择格式  ③ 开始下载" Foreground="{StaticResource TextFaint}"
+                                   FontSize="11.5" Margin="0,8,0,0"/>
                     </StackPanel>
                 </Grid>
                 <Grid Margin="0,12,0,0">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource Label}" Text="格式：" VerticalAlignment="Center"/>
-                    <ComboBox Grid.Column="1" x:Name="FormatCombo" ItemsSource="{Binding Formats}"
+                    <ComboBox Grid.Column="0" x:Name="FormatCombo" ItemsSource="{Binding Formats}"
                               SelectedItem="{Binding SelectedFormat}" DisplayMemberPath="Display"
-                              HorizontalAlignment="Stretch" Margin="0,0,12,0"/>
-                    <CheckBox Grid.Column="2" Content="仅音频" IsChecked="{Binding AudioOnly}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                    <ComboBox Grid.Column="3" Width="80" ItemsSource="{Binding AudioFormats}"
-                              SelectedItem="{Binding SelectedAudioFormat}"
-                              IsEnabled="{Binding AudioOnly}"/>
-                    <CheckBox Grid.Column="4" Content="字幕" IsChecked="{Binding DownloadSubs}" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                    <ComboBox Grid.Column="5" Width="110" x:Name="SubLangCombo" Text="zh,en"
+                              ToolTip="画质 / 编码 / 体积"/>
+                    <CheckBox Grid.Column="1" Content="仅音频" IsChecked="{Binding AudioOnly}"
+                              VerticalAlignment="Center" Margin="14,0,6,0"/>
+                    <ComboBox Grid.Column="2" Width="78" ItemsSource="{Binding AudioFormats}"
+                              SelectedItem="{Binding SelectedAudioFormat}" IsEnabled="{Binding AudioOnly}"/>
+                    <CheckBox Grid.Column="3" Content="字幕" IsChecked="{Binding DownloadSubs}"
+                              VerticalAlignment="Center" Margin="14,0,6,0"/>
+                    <ComboBox Grid.Column="4" Width="100" x:Name="SubLangCombo" Text="zh,en"
                               IsEditable="True" IsEnabled="{Binding DownloadSubs}"/>
-                    <CheckBox Grid.Column="6" Content="封面" IsChecked="{Binding DownloadThumb}" VerticalAlignment="Center" Margin="12,0,12,0"/>
-                    <Button Grid.Column="7" Content="开始下载" Background="#3DD68C" FontWeight="SemiBold"
-                            Click="OnDownload" IsEnabled="{Binding NotBusy}" HorizontalAlignment="Right"/>
+                    <CheckBox Grid.Column="5" Content="封面" IsChecked="{Binding DownloadThumb}"
+                              VerticalAlignment="Center" Margin="14,0,0,0"/>
+                    <Button Grid.Column="6" Content="开始下载" Style="{StaticResource BtnGreen}"
+                            Click="OnDownload" IsEnabled="{Binding NotBusy}" Margin="16,0,0,0" FontSize="13.5"/>
                 </Grid>
             </StackPanel>
         </Border>
 
-        <!-- 中部：任务列表 + 日志 -->
-        <Grid Grid.Row="2">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="2*"/>
-                <RowDefinition Height="5"/>
-                <RowDefinition Height="1*"/>
-            </Grid.RowDefinitions>
-            <Border Grid.Row="0" Background="#26272C" CornerRadius="6" Padding="4">
-                <DataGrid x:Name="TaskGrid" ItemsSource="{Binding Tasks}" AutoGenerateColumns="False"
-                          Background="Transparent" BorderThickness="0" RowBackground="#2C2E34"
-                          AlternatingRowBackground="#26272C" Foreground="#E0E0E0"
-                          HeadersVisibility="Column" GridLinesVisibility="None" CanUserAddRows="False"
-                          SelectionMode="Single" IsReadOnly="True" FontSize="12.5"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="标题" Binding="{Binding Title}" Width="3*" >
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                    <Setter Property="Margin" Value="6,0"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Header="状态" Binding="{Binding Status}" Width="90">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                    <Setter Property="Margin" Value="6,0"/>
-                                    <Setter Property="TextAlignment" Value="Left"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTemplateColumn Header="进度" Width="2*">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="6,4,12,4">
-                                        <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100" Height="12"
-                                                     Background="#1A1B1F" Foreground="#4F8CFF" BorderThickness="0"/>
-                                        <TextBlock Text="{Binding ProgressText, Mode=OneWay}" HorizontalAlignment="Center"
-                                                   VerticalAlignment="Center" FontSize="11" Foreground="#DADADA"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="速度" Binding="{Binding Speed}" Width="90">
-                            <DataGridTextColumn.ElementStyle>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="VerticalAlignment" Value="Center"/>
-                                </Style>
-                            </DataGridTextColumn.ElementStyle>
-                        </DataGridTextColumn>
-                        <DataGridTemplateColumn Header="操作" Width="150">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3">
-                                        <Button Content="取消" FontSize="11.5" Padding="10,4" Margin="0,0,6,0" Background="#8A3B3B"
-                                                Click="OnCancelTask" Tag="{Binding}" IsEnabled="{Binding CanCancel}"/>
-                                        <Button Content="打开" FontSize="11.5" Padding="10,4" Background="#3A3F4B"
-                                                Click="OnOpenFile" Tag="{Binding}" IsEnabled="{Binding CanOpen}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </Border>
-            <GridSplitter Grid.Row="1" Background="Transparent" HorizontalAlignment="Stretch" ResizeBehavior="PreviousAndNext"/>
-            <Border Grid.Row="2" Background="#222327" CornerRadius="6" Padding="8">
-                <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="LogText" Text="{Binding LogText}" FontFamily="Consolas" FontSize="12"
-                               Foreground="#9FB0A8" TextWrapping="Wrap"/>
-                </ScrollViewer>
-            </Border>
+        <!-- 任务列表 -->
+        <Grid Grid.Row="3">
+            <Border CornerRadius="12" Background="Transparent"/>
+            <ListBox x:Name="TaskList" ItemsSource="{Binding Tasks}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     HorizontalContentAlignment="Stretch">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0"/>
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,10" Padding="14,11" CornerRadius="10"
+                                Background="{StaticResource CardBg}"
+                                BorderBrush="{StaticResource CardBorder}" BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0" Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="{Binding Title}" FontSize="13"
+                                               Foreground="{StaticResource TextMain}"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <Border Grid.Column="1" CornerRadius="9" Background="{Binding StatusBrush}"
+                                            Padding="9,3" Margin="0,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Status}" FontSize="11" Foreground="White"/>
+                                    </Border>
+                                    <Button Grid.Column="2" Content="取消" FontSize="11.5" Padding="10,4"
+                                            Margin="10,0,0,0" Background="Transparent"
+                                            Foreground="{StaticResource Danger}"
+                                            BorderBrush="#4A2E2E" Click="OnCancelTask"
+                                            IsEnabled="{Binding CanCancel}"/>
+                                    <Button Grid.Column="3" Content="打开" FontSize="11.5" Padding="10,4"
+                                            Margin="6,0,0,0" Click="OnOpenFile"
+                                            IsEnabled="{Binding CanOpen}"/>
+                                </Grid>
+                                <Grid Grid.Row="1" Margin="0,0,90,0">
+                                    <ProgressBar Value="{Binding Percent, Mode=OneWay}" Maximum="100"/>
+                                    <TextBlock Text="{Binding ProgressText, Mode=OneWay}" FontSize="10.5"
+                                               Foreground="#D8DBE0" HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock Grid.Row="1" Text="{Binding Speed}" FontSize="11"
+                                           Foreground="{StaticResource TextSub}" HorizontalAlignment="Right"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- 空状态提示 -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Visibility="{Binding TasksEmptyHintVisibility}" IsHitTestVisible="False">
+                <TextBlock Text="暂无下载任务" FontSize="15" Foreground="{StaticResource TextSub}"
+                           HorizontalAlignment="Center"/>
+                <TextBlock Text="① 粘贴链接  →  ② 点解析  →  ③ 选格式开始下载" FontSize="12.5"
+                           Foreground="{StaticResource TextFaint}" HorizontalAlignment="Center"
+                           Margin="0,8,0,0"/>
+            </StackPanel>
         </Grid>
 
-        <!-- 底栏：状态 + 设置 -->
-        <Grid Grid.Row="3" Margin="0,12,0,0">
+        <!-- 日志 -->
+        <Border Grid.Row="4" Margin="0,10,0,0" CornerRadius="10" Background="#1D1E23"
+                BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Padding="10,8">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="运行日志" FontSize="11"
+                           Foreground="{StaticResource TextFaint}" Margin="2,0,0,4"/>
+                <ScrollViewer x:Name="LogScroll" VerticalScrollBarVisibility="Auto" Height="86">
+                    <TextBlock x:Name="LogText" Text="{Binding LogText}" FontFamily="Consolas"
+                               FontSize="11.5" Foreground="#8FA192" TextWrapping="Wrap"/>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- 底栏 -->
+        <Grid Grid.Row="5" Margin="0,12,0,0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Style="{StaticResource Label}" Text="{Binding StatusText}" VerticalAlignment="Center"/>
-            <TextBlock Grid.Column="1" Style="{StaticResource Label}" Text="{Binding YtDlpVersion}" VerticalAlignment="Center" Margin="16,0,0,0"/>
-            <TextBlock Grid.Column="2"/>
-            <Button Grid.Column="3" Content="下载目录" Click="OnBrowseOutput" FontSize="12"/>
-            <Button Grid.Column="4" Content="设置" Click="OnSettings" Margin="8,0,0,0" FontSize="12"/>
-            <Button Grid.Column="5" Content="暂停全部" Margin="8,0,0,0" FontSize="12" Click="OnPauseAll"
-                    Visibility="{Binding PauseAllVisibility}"/>
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}" Foreground="{StaticResource TextSub}"
+                       FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" Content="下载目录" Click="OnBrowseOutput" FontSize="12" Padding="10,6"/>
+            <Button Grid.Column="2" Content="设置" Click="OnSettings" FontSize="12" Padding="10,6" Margin="8,0,0,0"/>
+            <Button Grid.Column="3" Content="暂停全部" FontSize="12" Padding="10,6" Margin="8,0,0,0"
+                    Click="OnPauseAll" Visibility="{Binding PauseAllVisibility}"/>
+            <Button Grid.Column="4" Content="打开日志文件夹" FontSize="12" Padding="10,6" Margin="8,0,0,0"
+                    Click="OnOpenOutputDir" ToolTip="打开下载目录"/>
         </Grid>
     </Grid>
 </Window>

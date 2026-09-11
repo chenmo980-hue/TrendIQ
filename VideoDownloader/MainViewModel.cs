@@ -14,19 +14,34 @@ public class TaskItem : INotifyPropertyChanged
 {
     public string Title { get; set; } = "";
     public string Url { get; set; } = "";
-    public string Status { get; set; } = "排队中";
-    public double Percent { get; set; }
-    public string Speed { get; set; } = "";
+    private string _status = "排队中";
+    public string Status
+    {
+        get => _status;
+        set { _status = value; Notify(); }
+    }
+    private double _percent;
+    public double Percent { get => _percent; set { _percent = value; Notify(); } }
+    private string _speed = "";
+    public string Speed { get => _speed; set { _speed = value; Notify(); } }
     public CancellationTokenSource Cts { get; } = new();
-    public bool CanCancel => Status is "排队中" or "下载中" or "解析中";
+    public bool CanCancel => Status is "排队中" or "下载中" or "解析中" or "合并中" or "提取音频";
     public bool CanOpen => Status is "已完成";
     public string OutputDir { get; set; } = "";
+
+    public System.Windows.Media.Brush StatusBrush => Status switch
+    {
+        "已完成" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x2F, 0xB3, 0x77)),
+        "已取消" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x5C, 0x61, 0x69)),
+        "失败" => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xE0, 0x6C, 0x6C)),
+        _ => new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6C, 0x8C, 0xFF)),
+    };
 
     public string ProgressText => Status switch
     {
         "已完成" => "100%",
-        "已取消" => "-",
-        "失败" => "-",
+        "已取消" => "已取消",
+        "失败" => "失败",
         _ => Percent > 0 ? $"{Percent:0.#}%" : "-",
     };
 
@@ -96,6 +111,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string LogText { get => _logText; set => Set(ref _logText, value); }
 
     public Visibility PauseAllVisibility => Tasks.Any(t => t.CanCancel) ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility TasksEmptyHintVisibility => Tasks.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     public VideoInfo? CurrentInfo { get; private set; }
 
@@ -234,6 +250,7 @@ public class MainViewModel : INotifyPropertyChanged
         };
         Tasks.Add(task);
         Notify(nameof(PauseAllVisibility));
+        Notify(nameof(TasksEmptyHintVisibility));
         AppendLog($"开始下载: {task.Title}");
 
         var req = new DownloadRequest
@@ -290,8 +307,8 @@ public class MainViewModel : INotifyPropertyChanged
         task.Cts.Cancel();
         task.Status = "已取消";
         task.Notify();
-        _dlp.CancelAll();
         Notify(nameof(PauseAllVisibility));
+        Notify(nameof(TasksEmptyHintVisibility));
     }
 
     public void PauseAll()
@@ -304,6 +321,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
         _dlp.CancelAll();
         Notify(nameof(PauseAllVisibility));
+        Notify(nameof(TasksEmptyHintVisibility));
     }
 
     public void OpenFile(TaskItem task)

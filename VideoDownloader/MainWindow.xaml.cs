@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using TrendIQDownloader.Models;
@@ -18,6 +19,24 @@ public partial class MainWindow : Window
     }
 
     private async void OnParse(object sender, RoutedEventArgs e) => await DoParseAsync();
+
+    private void OnPaste(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var text = Clipboard.GetText().Trim();
+            if (text.Length > 0)
+            {
+                _vm.Url = text;
+                UrlBox.Text = text;
+                _vm.StatusText = "已粘贴链接，点「解析」";
+            }
+        }
+        catch { }
+        UrlBox.Focus();
+    }
+
+    private void OnUrlAreaClick(object sender, MouseButtonEventArgs e) => UrlBox.Focus();
 
     private async Task DoParseAsync()
     {
@@ -90,5 +109,18 @@ public partial class MainWindow : Window
     {
         var dlg = new SettingsDialog(_vm) { Owner = this };
         dlg.ShowDialog();
+    }
+
+    private void OnOpenOutputDir(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dir = _vm.GetSettings().OutputDir;
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dir) { UseShellExecute = true });
+            else
+                _vm.StatusText = "下载目录不存在";
+        }
+        catch (Exception ex) { _vm.StatusText = "打开失败: " + ex.Message; }
     }
 }
