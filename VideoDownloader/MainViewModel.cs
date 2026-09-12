@@ -149,10 +149,10 @@ public class MainViewModel : INotifyPropertyChanged
         }
         catch { YtDlpVersion = "yt-dlp ?"; }
         var parts = new List<string>();
-        if (!string.IsNullOrEmpty(_settings.Proxy)) parts.Add("代理已配置");
-        else parts.Add("无代理");
-        if (!string.IsNullOrEmpty(_settings.CookieFile) && File.Exists(_settings.CookieFile)) parts.Add("Cookie 已配置");
-        StatusText = "就绪 · " + string.Join(" · ", parts);
+        parts.Add(string.IsNullOrEmpty(_settings.Proxy) ? "⚠ 无代理" : "代理√");
+        parts.Add(!string.IsNullOrEmpty(_settings.CookieFile) && File.Exists(_settings.CookieFile) ? "Cookie√" : "⚠ 无Cookie");
+        StatusText = "就绪 · " + string.Join(" · ", parts)
+            + (string.IsNullOrEmpty(_settings.Proxy) ? "（YouTube需要代理:设置里配置）" : "");
     }
 
     public async Task EnsureToolsAsync(bool force, CancellationToken ct)

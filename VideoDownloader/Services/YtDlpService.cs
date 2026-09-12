@@ -242,6 +242,20 @@ public partial class YtDlpService
     private async Task<(int code, string errTail)> RunDownloadAsync(string exe, List<string> args,
         IProgress<DownloadProgress>? progress, IProgress<string>? log, CancellationToken ct)
     {
+        // PyInstaller 偶发 "Failed to load Python DLL" 启动失败，自动重试一次
+        for (var attempt = 0; ; attempt++)
+        {
+            var r = await RunDownloadOnceAsync(exe, args, progress, log, ct);
+            if (attempt >= 1 || !r.dllFail) return (r.code, r.errTail);
+            log?.Report("[重试] yt-dlp 启动异常(已知偶发问题)，自动重试...");
+            await Task.Delay(1500, ct);
+        }
+    }
+
+    private async Task<(int code, string errTail, bool dllFail)> RunDownloadOnceAsync(string exe, List<string> args,
+        IProgress<DownloadProgress>? progress, IProgress<string>? log, CancellationToken ct)
+    {
+        var dllFail = false;
         var psi = MakePsi(exe, args);
         using var proc = new Process { StartInfo = psi };
         var errSb = new StringBuilder();
@@ -294,11 +308,13 @@ public partial class YtDlpService
         {
             lock (errSb) { errSb.AppendLine(line); lastErrLine = line; }
             log?.Report("[stderr] " + line);
+            if (line.Contains("Failed to load Python DLL", StringComparison.OrdinalIgnoreCase))
+                dllFail = true;
         }, ct);
         await Task.WhenAll(outTask, errTask);
         await proc.WaitForExitAsync(ct);
         _dlProc = null;
-        return (proc.ExitCode, lastErrLine);
+        return (proc.ExitCode, lastErrLine, dllFail);
     }
 
     private static double? ParsePct(string s)

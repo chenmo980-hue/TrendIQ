@@ -16,6 +16,19 @@ public partial class MainWindow : Window
         DataContext = _vm;
         Loaded += async (_, _) => { if (!_vm.GetSettings().SkipAutoToolCheck) await _vm.EnsureToolsAsync(false, CancellationToken.None); };
         Closing += (_, _) => _vm.PauseAll();
+        _vm.PropertyChanged += (s, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.LogText))
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (LogBox.Text.Length > 0)
+                    {
+                        LogBox.Focus();
+                        LogBox.CaretIndex = LogBox.Text.Length;
+                        LogBox.ScrollToEnd();
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+        };
     }
 
     private async void OnParse(object sender, RoutedEventArgs e) => await DoParseAsync();
@@ -122,5 +135,24 @@ public partial class MainWindow : Window
                 _vm.StatusText = "下载目录不存在";
         }
         catch (Exception ex) { _vm.StatusText = "打开失败: " + ex.Message; }
+    }
+
+    private void OnCopyLog(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+        var log = _vm.LogText;
+        if (!string.IsNullOrEmpty(log))
+        {
+            Clipboard.SetText(log);
+            _vm.StatusText = "日志已复制到剪贴板";
+        }
+        }
+        catch { }
+    }
+
+    private void OnSelectAllLog(object sender, RoutedEventArgs e)
+    {
+        LogBox.SelectAll();
     }
 }

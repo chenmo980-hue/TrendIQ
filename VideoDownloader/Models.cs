@@ -98,3 +98,8 @@ public class SettingsData
     public bool Simultaneous { get; set; }
     public bool SkipAutoToolCheck { get; set; }
 }
+
+public static class AppVersion
+{
+    public const string Version = "v1.3";
+}
