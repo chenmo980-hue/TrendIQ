@@ -148,6 +148,11 @@ public class MainViewModel : INotifyPropertyChanged
             else YtDlpVersion = "yt-dlp 未安装";
         }
         catch { YtDlpVersion = "yt-dlp ?"; }
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(_settings.Proxy)) parts.Add("代理已配置");
+        else parts.Add("无代理");
+        if (!string.IsNullOrEmpty(_settings.CookieFile) && File.Exists(_settings.CookieFile)) parts.Add("Cookie 已配置");
+        StatusText = "就绪 · " + string.Join(" · ", parts);
     }
 
     public async Task EnsureToolsAsync(bool force, CancellationToken ct)
@@ -205,7 +210,7 @@ public class MainViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             AppendLog("解析失败: " + ex.Message);
-            StatusText = "解析失败: " + ex.Message;
+            StatusText = FriendlyError(ex.Message);
         }
         finally { Busy = false; }
     }
@@ -323,6 +328,25 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     public string GetSubLangs() => "zh,en";
+
+    public static string FriendlyError(string msg)
+    {
+        if (msg.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("not a bot", StringComparison.OrdinalIgnoreCase))
+            return "YouTube 要求登录验证：请在「设置」里配置 Cookie 文件与代理（程序目录已附带 youtube-cookies.txt）";
+        if (msg.Contains("429") || msg.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase))
+            return "请求过于频繁被限流：等待几分钟再试";
+        if (msg.Contains("Failed to load Python DLL", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("LoadLibrary", StringComparison.OrdinalIgnoreCase))
+            return "yt-dlp 启动异常（已知偶发问题）：请再点一次解析";
+        if (msg.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
+            return "不支持的链接，请检查是否为视频页地址";
+        if (msg.Contains("Unable to download webpage", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("getaddrinfo") || msg.Contains("Connection refused") ||
+            msg.Contains("timed out", StringComparison.OrdinalIgnoreCase))
+            return "网络连接失败：需要代理的站点请在「设置」里配置代理";
+        return "解析失败: " + msg;
+    }
 
     public void CancelTask(TaskItem task)
     {

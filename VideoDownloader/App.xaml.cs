@@ -23,9 +23,11 @@ public partial class App : System.Windows.Application
     {
         var sb = new StringBuilder();
         var url = args.Length > 1 ? args[1] : "https://www.youtube.com/watch?v=BaW_jenozKc";
-        var proxy = args.Length > 2 ? args[2] : null;
+        var settings = new Services.SettingsService().Load();
+        var proxy = args.Length > 2 ? args[2] : settings.Proxy;
         sb.AppendLine($"url: {url}");
         sb.AppendLine($"proxy: {proxy ?? "(none)"}");
+        sb.AppendLine($"settingsCookie: {(string.IsNullOrEmpty(settings.CookieFile) ? "(none)" : settings.CookieFile)}");
         var resultPath = Path.Combine(AppContext.BaseDirectory, "smoke-result.txt");
         try
         {
@@ -33,8 +35,7 @@ public partial class App : System.Windows.Application
             sb.AppendLine($"toolsDir: {svc.ToolsDir}");
             await svc.EnsureToolsAsync(false, proxy, new Progress<string>(s => sb.AppendLine("tool: " + s)), new Progress<Models.ToolsProgress>(p => sb.AppendLine($"dl {p.Name}: {p.Current / 1048576}MB/{p.Total / 1048576}MB")), CancellationToken.None);
             var cookieFile = Path.Combine(AppContext.BaseDirectory, "youtube-cookies.txt");
-            var useCookies = File.Exists(cookieFile) && url.Contains("youtube.com", StringComparison.OrdinalIgnoreCase);
-            var ck = useCookies ? cookieFile : null;
+            var useCookies = File.Exists(cookieFile) && url.Contains("youtube.com", StringComparison.OrdinalIgnoreCase);            var ck = useCookies ? cookieFile : null;
             var info = await svc.FetchInfoAsync(url, proxy, ck, new Progress<string>(s => sb.AppendLine("info-log: " + s)), CancellationToken.None);
             sb.AppendLine($"title: {info.Title}");
             sb.AppendLine($"uploader: {info.Uploader}");

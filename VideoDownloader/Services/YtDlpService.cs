@@ -59,11 +59,38 @@ public partial class YtDlpService
         return args;
     }
 
+    private static readonly string[] FallbackClients = ["web_safari", "tv", "mweb"];
+
     public async Task<VideoInfo> FetchInfoAsync(string url, string? proxy, string? cookieFile,
         IProgress<string>? log, CancellationToken ct)
     {
         if (!ToolsExist()) throw new InvalidOperationException("yt-dlp.exe 未就绪，请先点击「工具/更新」下载。");
+        Exception? lastEx = null;
+        // 依次尝试：默认 → web_safari → tv → mweb（YouTube 动态风控，不同客户端被拦概率不同）
+        var clients = new string?[] { null }.Concat(FallbackClients.Select(c => (string?)c));
+        foreach (var client in clients)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                return await FetchInfoCoreAsync(url, proxy, cookieFile, client, log, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested
+                && ex.Message.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase))
+            {
+                lastEx = ex;
+                log?.Report($"[重试] 客户端({client ?? "默认"})被风控拦截，换下一个...");
+            }
+        }
+        throw lastEx ?? new InvalidOperationException("解析失败");
+    }
+
+    private async Task<VideoInfo> FetchInfoCoreAsync(string url, string? proxy, string? cookieFile,
+        string? playerClient, IProgress<string>? log, CancellationToken ct)
+    {
         var args = BaseArgs(proxy, cookieFile);
+        if (playerClient != null)
+            args.AddRange(["--extractor-args", $"\"youtube:player_client={playerClient}\""]);
         args.Add("-J");
         args.Add("--no-playlist");
         args.Add($"\"{url}\"");
@@ -156,6 +183,23 @@ public partial class YtDlpService
 
         var (code, errTail) = await RunDownloadAsync(YtDlpPath, args, progress, log, ct);
         if (ct.IsCancellationRequested) return;
+        if (code != 0 && errTail.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            // 风控拦截，依次换客户端重试
+            foreach (var client in FallbackClients)
+            {
+                if (ct.IsCancellationRequested) return;
+                log?.Report($"[重试] 下载被风控拦截，改用 {client} 客户端...");
+                var retryArgs = new List<string>(args);
+                retryArgs.InsertRange(retryArgs.Count - 1, ["--extractor-args", $"\"youtube:player_client={client}\""]);
+                var (code2, errTail2) = await RunDownloadAsync(YtDlpPath, retryArgs, progress, log, ct);
+                if (ct.IsCancellationRequested) return;
+                if (code2 == 0) return;
+                if (!errTail2.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(errTail2) ? $"yt-dlp 退出码 {code2}" : errTail2);
+            }
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(errTail) ? $"yt-dlp 退出码 {code}" : errTail);
+        }
         if (code != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(errTail) ? $"yt-dlp 退出码 {code}" : errTail);
     }
@@ -280,6 +324,20 @@ public partial class YtDlpService
     }
 
     private async Task<(string stdout, string stderr, int code, string errTail)> RunAsync(
+        string exe, List<string> args, IProgress<string>? log, CancellationToken ct, Action<Process?> register)
+    {
+        // PyInstaller 偶发 "Failed to load Python DLL" 启动失败，自动重试一次
+        for (var attempt = 0; ; attempt++)
+        {
+            var result = await RunOnceAsync(exe, args, log, ct, register);
+            if (attempt >= 1 || !result.stderr.Contains("Failed to load Python DLL", StringComparison.OrdinalIgnoreCase))
+                return result;
+            log?.Report("[重试] yt-dlp 启动异常(已知偶发问题)，自动重试...");
+            await Task.Delay(1500, ct);
+        }
+    }
+
+    private async Task<(string stdout, string stderr, int code, string errTail)> RunOnceAsync(
         string exe, List<string> args, IProgress<string>? log, CancellationToken ct, Action<Process?> register)
     {
         var psi = MakePsi(exe, args);
