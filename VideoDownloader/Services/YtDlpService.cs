@@ -134,19 +134,65 @@ public partial class YtDlpService
             args.AddRange(["-f", req.FormatArg, "--merge-output-format", "mp4"]);
         }
 
-        if (!string.IsNullOrWhiteSpace(req.SubtitleLangs))
-            args.AddRange(["--write-subs", "--write-auto-subs", "--sub-langs", req.SubtitleLangs, "--convert-subs", "srt"]);
         if (req.WriteThumbnail)
             args.Add("--write-thumbnail");
+
+        if (req.TranslateToChinese)
+        {
+            // 两阶段：先单独拉字幕(YouTube的timedtext接口对连续请求429限流,失败带重试)，
+            // 成功后再下载视频,避免字幕请求被视频流程淹没
+            await DownloadSubtitlesSeparatelyAsync(req, log, ct);
+            // 字幕已落盘,视频下载阶段不再要字幕
+        }
+        else if (!string.IsNullOrWhiteSpace(req.SubtitleLangs))
+        {
+            args.AddRange(["--write-subs", "--write-auto-subs", "--sub-langs", $"\"{req.SubtitleLangs}\"", "--convert-subs", "srt"]);
+        }
 
         args.Add($"\"{req.Url}\"");
 
         Directory.CreateDirectory(req.OutputDir);
+        log?.Report("CMD: yt-dlp " + string.Join(' ', args));
 
         var (code, errTail) = await RunDownloadAsync(YtDlpPath, args, progress, log, ct);
         if (ct.IsCancellationRequested) return;
         if (code != 0)
             throw new InvalidOperationException(string.IsNullOrWhiteSpace(errTail) ? $"yt-dlp 退出码 {code}" : errTail);
+    }
+
+    private async Task DownloadSubtitlesSeparatelyAsync(DownloadRequest req, IProgress<string>? log, CancellationToken ct)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            var args = BaseArgs(req.Proxy, req.CookieFile);
+            args.AddRange(["--skip-download", "--no-playlist", "--newline", "--restrict-filenames",
+                "--write-subs", "--write-auto-subs",
+                "--sub-langs", "\"zh-Hans,zh,zh-CN\"",
+                "--convert-subs", "srt",
+                "-P", $"\"{req.OutputDir}\"",
+                "-o", $"\"{req.OutputTemplate ?? "%(title).80s [%(id)s].%(ext)s"}\"",
+                $"\"{req.Url}\""]);
+            log?.Report($"[字幕] 第 {attempt} 次尝试获取中文字幕...");
+            var (stdout, _, code, errTail) = await RunAsync(YtDlpPath, args, log, ct, _ => { });
+            if (ct.IsCancellationRequested) return;
+            var srtExists = Directory.GetFiles(req.OutputDir, "*.srt").Length > 0;
+            if (code == 0 && srtExists)
+            {
+                log?.Report("[字幕] 中文字幕获取成功");
+                return;
+            }
+            if (attempt < maxAttempts)
+            {
+                var wait = attempt * 20;
+                log?.Report($"[字幕] 未成功({(errTail.Contains("429") ? "限流" : "无可用字幕或出错")}), {wait}s 后重试");
+                await Task.Delay(TimeSpan.FromSeconds(wait), ct);
+            }
+            else
+            {
+                log?.Report("[字幕] 已尝试多次仍未获取到中文字幕(该视频可能无中文/机翻字幕)");
+            }
+        }
     }
 
     private async Task<(int code, string errTail)> RunDownloadAsync(string exe, List<string> args,

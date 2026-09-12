@@ -65,6 +65,7 @@ public class DownloadRequest
     public int? PlaylistLimit { get; set; }
     public bool IsPlaylist { get; set; }
     public string? OutputTemplate { get; set; }
+    public bool TranslateToChinese { get; set; }
 }
 
 public class DownloadProgress

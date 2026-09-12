@@ -76,6 +76,7 @@ public class MainViewModel : INotifyPropertyChanged
     public string SelectedAudioFormat { get; set; } = "mp3";
     public bool DownloadSubs { get; set; }
     public bool DownloadThumb { get; set; }
+    public bool TranslateToChinese { get; set; } = true;
 
     private string _title = "";
     public string Title { get => _title; set => Set(ref _title, value); }
@@ -264,6 +265,7 @@ public class MainViewModel : INotifyPropertyChanged
             CookieFile = _settings.CookieFile,
             SubtitleLangs = DownloadSubs ? GetSubLangs() : null,
             WriteThumbnail = DownloadThumb,
+            TranslateToChinese = TranslateToChinese,
         };
 
         var progress = new Progress<DownloadProgress>(p =>
@@ -280,6 +282,26 @@ public class MainViewModel : INotifyPropertyChanged
             task.Percent = 100;
             task.Speed = "";
             AppendLog("完成: " + task.Title);
+            if (TranslateToChinese)
+            {
+                task.Status = "转写文本";
+                task.Notify();
+                try
+                {
+                    var txt = SrtToTextService.GenerateTextForVideo(LastVideoPath(task.OutputDir));
+                    if (txt != null)
+                    {
+                        AppendLog("中文字幕文本已生成: " + Path.GetFileName(txt));
+                        task.Status = "已完成";
+                    }
+                    else
+                    {
+                        AppendLog("未找到可用字幕（该视频无中文/机翻字幕）");
+                        task.Status = "已完成";
+                    }
+                }
+                catch (Exception ex) { AppendLog("字幕转文本失败: " + ex.Message); task.Status = "已完成"; }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -342,6 +364,14 @@ public class MainViewModel : INotifyPropertyChanged
     }
 
     private static string Sanitize(string s) => s;
+
+    private static string LastVideoPath(string outputDir)
+    {
+        var files = new DirectoryInfo(outputDir).GetFiles()
+            .Where(f => f.Extension is ".mp4" or ".mkv" or ".webm" or ".m4a" or ".mp3" or ".opus" or ".flac" or ".wav")
+            .OrderByDescending(f => f.LastWriteTimeUtc);
+        return files.FirstOrDefault()?.FullName ?? "";
+    }
 
     public void AppendLog(string line)
     {

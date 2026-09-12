@@ -287,7 +287,10 @@
                               IsEditable="True" IsEnabled="{Binding DownloadSubs}"/>
                     <CheckBox Grid.Column="5" Content="封面" IsChecked="{Binding DownloadThumb}"
                               VerticalAlignment="Center" Margin="14,0,0,0"/>
-                    <Button Grid.Column="6" Content="开始下载" Style="{StaticResource BtnGreen}"
+                    <CheckBox Grid.Column="6" x:Name="TranslateCb" Content="转中文文本"
+                              IsChecked="{Binding TranslateToChinese}" VerticalAlignment="Center"
+                              Margin="14,0,0,0" ToolTip="下载视频后自动获取中文字幕（无则用 YouTube 机翻）并生成 .zh.txt 纯文本"/>
+                    <Button Grid.Column="7" Content="开始下载" Style="{StaticResource BtnGreen}"
                             Click="OnDownload" IsEnabled="{Binding NotBusy}" Margin="16,0,0,0" FontSize="13.5"/>
                 </Grid>
             </StackPanel>
