@@ -51,10 +51,30 @@ dotnet run
 - 工具链自举：GitHub Release 下载 yt-dlp + gyan.dev ffmpeg 解压 ✓
 - YouTube 无 Cookie 会被风控拦截（需 Cookie + 代理）；字幕接口高频请求会 429 限流（已内置重试）
 
-## 已知问题
+## Cookie 刷新（重要）
 
-- Chrome/Edge 127+ 的 app-bound 加密导致 `--cookies-from-browser` 无法解密本机浏览器 Cookie；本机 CentBrowser 的 Cookie 因 DPAPI 用户级密钥跨机不可解。**推荐用 CDP 导出 cookies.txt**（浏览器开 `--remote-debugging-port=9333` 后从 DevTools 协议拉 `Network.getCookies`）
-- yt-dlp.exe（PyInstaller 打包）偶发 `Failed to load Python DLL` 启动失败，重试即可；清理 `%TEMP%\_MEI*` 可减少复发
+YouTube 登录 Cookie 会过期（通常几天到几周；Google 会轮换 youtube.com 域的 `SAPISID/SID/LOGIN_INFO`）。
+**过期症状**：之前能解析的视频突然报 `Sign in to confirm you're not a bot`。
+**刷新步骤**（需本机有登录态的 Chromium 系浏览器）：
+
+```powershell
+# 1. 启动带远程调试的浏览器（示例为 F 盘便携版，profile 须是含登录态的那个）
+& 'F:\Tools\chrome\chrome.exe' --remote-debugging-port=9333 --profile-directory=Default
+# 2. 用 CDP 导出（见项目历史脚本 cdp_export_cookies2.py 思路）：
+#    连 ws://127.0.0.1:9333/json 取 tab 的 webSocketDebuggerUrl，
+#    发 Network.getCookies（含 youtube.com / google.com / accounts.google.com），
+#    写成 Netscape 格式覆盖 youtube-cookies.txt
+# 3. 把新文件复制到程序目录（publish/ 与源码根各一份）
+```
+
+程序启动时会自动发现同目录的 `youtube-cookies.txt`，无需手动配置。
+
+## 已知限制
+
+- **单视频风控**：YouTube 会对部分视频单独加强验证。程序内置 player_client 降级链（默认→web_safari→tv→mweb）自动重试；若全部被拦通常是临时性的，等风控窗口过去再试。
+- **CDN 边缘屏蔽**：个别视频的媒体服务器（googlevideo 边缘节点）会拒绝特定代理出口 IP 的 TLS 握手，表现为解析成功但下载报 SSL EOF。对照表现为：换视频可下、该视频不行。换网络环境或等待边缘轮换可解。
+- **请求频率**：短时间内对同一视频反复请求会加重风控（429/空字幕）。程序对字幕下载内置 3 次递增重试；人工测试时也请间隔几分钟。
+- Chrome/Edge 127+ 的 app-bound 加密导致 `--cookies-from-browser` 无法解密本机浏览器 Cookie；新版 yt-dlp 需要 youtube.com 域的 `SAPISID/__Secure-1PAPISID/LOGIN_INFO` 才能生成三重认证头（旧导出文件缺这些会直接被拦）。
 
 ## 许可
 

@@ -333,14 +333,18 @@ public class MainViewModel : INotifyPropertyChanged
     {
         if (msg.Contains("Sign in to confirm", StringComparison.OrdinalIgnoreCase) ||
             msg.Contains("not a bot", StringComparison.OrdinalIgnoreCase))
-            return "YouTube 要求登录验证：请在「设置」里配置 Cookie 文件与代理（程序目录已附带 youtube-cookies.txt）";
+            return "YouTube 要求登录验证：①确认「设置」里 Cookie 文件与代理已配置 ②若之前能用现在不行，多半是 Cookie 过期，需重新导出 cookies.txt 替换（见 README「Cookie 刷新」一节）③个别视频被 YouTube 单独风控，可换视频或稍后再试";
         if (msg.Contains("429") || msg.Contains("Too Many Requests", StringComparison.OrdinalIgnoreCase))
-            return "请求过于频繁被限流：等待几分钟再试";
+            return "请求过于频繁被限流：等待几分钟再试（短时间内对同一视频多次请求会加重风控）";
         if (msg.Contains("Failed to load Python DLL", StringComparison.OrdinalIgnoreCase) ||
             msg.Contains("LoadLibrary", StringComparison.OrdinalIgnoreCase))
             return "yt-dlp 启动异常（已知偶发问题）：请再点一次解析";
         if (msg.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase))
             return "不支持的链接，请检查是否为视频页地址";
+        if (msg.Contains("EOF occurred in violation of protocol", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("TLS connect error", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("SSL", StringComparison.OrdinalIgnoreCase) && msg.Contains("download", StringComparison.OrdinalIgnoreCase))
+            return "媒体服务器连接被重置：通常是代理出口 IP 被该视频的 CDN 边缘屏蔽，可稍后重试或换网络环境";
         if (msg.Contains("Unable to download webpage", StringComparison.OrdinalIgnoreCase) ||
             msg.Contains("getaddrinfo") || msg.Contains("Connection refused") ||
             msg.Contains("timed out", StringComparison.OrdinalIgnoreCase))
