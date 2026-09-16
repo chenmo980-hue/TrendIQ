@@ -12,6 +12,20 @@ using System.Windows.Threading;
 
 namespace ApiTester.Wpf.ViewModels
 {
+    /// <summary>模型列表项。Name 来自 /models，IsSelected 绑定到 SelectedModel 供标签高亮。</summary>
+    public sealed class ModelItem : System.ComponentModel.INotifyPropertyChanged
+    {
+        public string Name { get; }
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { if (_isSelected != value) { _isSelected = value; PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsSelected))); } }
+        }
+        public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
+        public ModelItem(string name) { Name = name; }
+    }
+
     public sealed class MainViewModel : ViewModelBase
     {
         // 默认走直连：环境里 https_proxy 配错时，CONNECT 隧道后的 schannel 握手会拿不到客户端凭据
@@ -102,7 +116,7 @@ namespace ApiTester.Wpf.ViewModels
             set => SetProperty(ref _outputText, value);
         }
 
-        public ObservableCollection<string> Models { get; } = new();
+        public ObservableCollection<ModelItem> Models { get; } = new();
 
         public string SelectedModel
         {
@@ -151,6 +165,7 @@ namespace ApiTester.Wpf.ViewModels
             if (string.IsNullOrWhiteSpace(model) || model == _selectedModel) { return; }
             var previous = _selectedModel;
             SelectedModel = model;
+            SyncModelItemsSelection();
             StatusText = "正在验证 " + model + " ...";
             var ok = await ProbeModelAsync(model);
             if (ok)
@@ -162,8 +177,15 @@ namespace ApiTester.Wpf.ViewModels
                 // 联动校验：标签点击切了 SelectedModel，探活失败说明该模型实际不可用，
                 // 回滚避免用户进死路。状态栏给出明确原因。
                 SelectedModel = previous;
+                SyncModelItemsSelection();
                 StatusText = model + " 在该中继上不可用，已回退到 " + previous;
             }
+        }
+
+        /// <summary>把 Models 里名称等于 _selectedModel 的项打上 IsSelected 标记，UI 标签高亮就靠它。</summary>
+        private void SyncModelItemsSelection()
+        {
+            foreach (var m in Models) { m.IsSelected = m.Name == _selectedModel; }
         }
 
         private string Url(string path)
@@ -257,12 +279,13 @@ namespace ApiTester.Wpf.ViewModels
                     {
                         if (item.TryGetProperty("id", out var id) && !string.IsNullOrWhiteSpace(id.GetString()))
                         {
-                            Models.Add(id.GetString()!);
+                            Models.Add(new ModelItem(id.GetString()!));
                         }
                     }
                 }
-                SelectedModel = Models.FirstOrDefault() ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(_savedModel) && Models.Contains(_savedModel))
+                SelectedModel = Models.FirstOrDefault()?.Name ?? string.Empty;
+                SyncModelItemsSelection();
+                if (!string.IsNullOrWhiteSpace(_savedModel) && Models.Any(m => m.Name == _savedModel))
                 {
                     // /models 目录里列出 DeepSeek-V4-Pro 不代表 /chat 也接它——目录与实际可用性经常不一致。
                     // 立刻对保存的模型发一次极小探针，能用就保留；不能就清掉 _savedModel 并回退到列表第一个，
@@ -270,6 +293,7 @@ namespace ApiTester.Wpf.ViewModels
                     if (await ProbeModelAsync(_savedModel))
                     {
                         SelectedModel = _savedModel;
+                        SyncModelItemsSelection();
                     }
                     else
                     {
@@ -443,10 +467,11 @@ namespace ApiTester.Wpf.ViewModels
             return "诊断：请求未完成\n" + exception.Message + "\n\n请检查 API 基本网址、密钥、模型 ID 与网络连接。";
         }
 
-        private void ClearOutput()
+        /// <summary>清空输出区与状态栏。不依赖任何 IsBusy 状态——任何时候都能调。</summary>
+        public void ClearOutput()
         {
             OutputText = string.Empty;
-            StatusText = "就绪";
+            StatusText = "已清空";
         }
 
         /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>

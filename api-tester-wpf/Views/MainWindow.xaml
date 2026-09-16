@@ -304,7 +304,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Button Margin="0,0,8,8" Padding="9,6" Cursor="Hand"
-                                                Click="ModelTag_Click" Tag="{Binding}"
+                                                Click="ModelTag_Click" Tag="{Binding Name}"
                                                 Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
@@ -318,10 +318,14 @@
                                                         <Trigger Property="IsMouseOver" Value="True">
                                                             <Setter TargetName="Bd" Property="Background" Value="#243757" />
                                                         </Trigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#0F3A5F" />
+                                                            <Setter TargetName="Bd" Property="BorderBrush" Value="#38BDF8" />
+                                                        </DataTrigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
                                             </Button.Template>
-                                            <TextBlock Foreground="#CBD5E1" Text="{Binding}" FontFamily="Consolas" FontSize="12" />
+                                            <TextBlock Foreground="#CBD5E1" Text="{Binding Name}" FontFamily="Consolas" FontSize="12" />
                                         </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -361,8 +365,10 @@
                             <Button Margin="14,0,0,0" MinWidth="108" Height="34" Content="发送消息" Style="{StaticResource DarkButtonBase}"
                                     Foreground="#052E16" Background="#4ADE80" BorderBrush="#4ADE80" FontWeight="SemiBold"
                                     Command="{Binding SendMessageCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+                            <!-- 不用 Command 避免 DelegateCommand 任何潜在 CanExecute 行为影响；
+                                 显式 IsEnabled="True" 防止 DMSkin 主题在某些时机把它纳入 IsBusy 联动。 -->
                             <Button Margin="10,0,0,0" Height="34" Padding="14,0,14,0" Content="清空结果" Style="{StaticResource DarkButtonBase}"
-                                    Command="{Binding ClearOutputCommand}" />
+                                    IsEnabled="True" Click="ClearOutputButton_OnClick" />
                         </StackPanel>
                     </Grid>
                 </Border>

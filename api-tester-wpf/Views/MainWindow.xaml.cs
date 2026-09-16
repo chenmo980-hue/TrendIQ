@@ -112,5 +112,14 @@ namespace ApiTester.Wpf.Views
                 vm.SelectModelFromTag(model);
             }
         }
+
+        private void ClearOutputButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            // 不走 Command，直接调 VM 的公开方法——任何时候都能清空。
+            if (DataContext is MainViewModel vm)
+            {
+                vm.ClearOutput();
+            }
+        }
     }
 }
