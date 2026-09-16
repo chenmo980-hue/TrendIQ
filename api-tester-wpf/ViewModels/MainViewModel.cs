@@ -235,7 +235,18 @@ namespace ApiTester.Wpf.ViewModels
                 SelectedModel = Models.FirstOrDefault() ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(_savedModel) && Models.Contains(_savedModel))
                 {
-                    SelectedModel = _savedModel;
+                    // /models 目录里列出 DeepSeek-V4-Pro 不代表 /chat 也接它——目录与实际可用性经常不一致。
+                    // 立刻对保存的模型发一次极小探针，能用就保留；不能就清掉 _savedModel 并回退到列表第一个，
+                    // 否则用户进界面就拿到"400 not supported"，看起来"一直提示错误"。
+                    if (await ProbeModelAsync(_savedModel))
+                    {
+                        SelectedModel = _savedModel;
+                    }
+                    else
+                    {
+                        StatusText = "已保存的 " + _savedModel + " 在该中继上实际不可用，已自动切换到 " + SelectedModel;
+                        _savedModel = string.Empty;
+                    }
                 }
                 StatusText = Models.Count > 0
                     ? $"已加载 {Models.Count} 个模型 · {stopwatch.Elapsed.TotalSeconds:0.00}s"
@@ -336,6 +347,36 @@ namespace ApiTester.Wpf.ViewModels
             catch
             {
                 // 诊断写不进去也不能再抛。
+            }
+        }
+
+        /// <summary>对单个模型发一个极小探针，确认它在 /chat 端真的可用。失败立即返回，不抛。</summary>
+        private async Task<bool> ProbeModelAsync(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) { return false; }
+            try
+            {
+                var payload = new
+                {
+                    model = model,
+                    messages = new[] { new { role = "user", content = "ping" } },
+                    max_tokens = 1
+                };
+                using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var request = CreateRequest(HttpMethod.Post, "/chat/completions", content);
+                var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
+                using var response = await _httpClient.SendAsync(request, cts.Token);
+                if (!response.IsSuccessStatusCode)
+                {
+                    WriteDiag("ProbeModel " + model + " 失败", new HttpRequestException("HTTP " + (int)response.StatusCode));
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                WriteDiag("ProbeModel " + model + " 异常", ex);
+                return false;
             }
         }
 

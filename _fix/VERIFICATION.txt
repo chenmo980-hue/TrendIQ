@@ -1,70 +1,66 @@
-# VERIFICATION — api-tester-wpf 真实根因与可用模型清单
+# VERIFICATION — 自动测活回退到可用模型
 
-更新时间：2026-09-16 21:42
+更新时间：2026-09-16 23:38
 工作区：E:\\WorkSpaces\\TrendIQ
 
-## 一、本轮抓到的根因（用 Node OpenSSL 直连，绕开 .NET schannel）
+## 一、问题真因
 
-用户报"一直提示错误"。用 Node 直连 https://api.hcnsec.cn/v1 拿到中继真实响应：
+用户贴出 400 错误原文：
+  诊断：请求未完成
+  HTTP 400 Bad Request · Requested model DeepSeek-V4-Pro not supported
+  400：中继拒绝了这次请求...
 
-GET /models   HTTP 200   1.07s   解析出 19 个模型
-auto, DeepSeek-V4-Flash, DeepSeek-V4-Pro, DeepSeek-V4.1-Flash, glm-4.5-air,
-glm-5.3, glm-5.3-flash, kimi-k3, longcat-2.0, Qwen3-Embedding-8B,
-Qwen3.6-35B-A3B, Qwen3.8-27B, Qwen3.8-Flash-Next, sensenova-6.8-flash-lite,
-sensenova-u1.5-lite, spark-x2.5, step-3.7-flash, step-explore, step-router-v1
+磁盘里保存的模型 DeepSeek-V4-Pro 在该中继上实际无通道。用 Node 直连同一个中继
+POST /chat/completions 拿到的正是这个 400。
 
-逐个 POST /chat/completions {model, messages:[user:你好], max_tokens:16} 实测：
-| 模型               | HTTP | 耗时   | 结果                                  |
-|--------------------|------|--------|---------------------------------------|
-| auto               | 200  | 10.31s | ✅ "Hello! How can I assist you..."    |
-| step-3.7-flash     | 200  | 2.32s  | ✅ 正常返回 content                   |
-| DeepSeek-V4-Flash  | 200  | 7.14s  | ✅ "你好呀！很高兴见到你～😊"         |
-| glm-4.5-air        | 200  | 2.02s  | ✅ "你好！😊 很高兴见到你！"          |
-| DeepSeek-V4-Pro    | 400  | 2.03s  | ❌ "Requested model DeepSeek-V4-Pro not supported" |
-| DeepSeek-V4.1-Flash| 404  | 0.39s  | ❌ openai_error                       |
-| deepseek-chat      | 503  | 0.34s  | ❌ No available channel for model deepseek-chat |
-| gpt-4o-mini        | 503  | 0.30s  | ❌ No available channel for model gpt-4o-mini |
-| glm-5.3            | 0    | 45s    | ❌ TIMEOUT（死通道）                  |
+## 二、Node 实测中继 9 个模型
 
-磁盘里保存的 SelectedModel = DeepSeek-V4-Pro —— 这就是"一直提示错误"的直接原因：
-点发送 → 中继返回 400 not supported → 应用按新逻辑输出"400：中继拒绝了这次请求"。
+| 模型               | HTTP | 耗时   | 结果 |
+|--------------------|------|--------|------|
+| auto               | 200  | 10.31s | OK   |
+| step-3.7-flash     | 200  | 2.32s  | OK   |
+| DeepSeek-V4-Flash  | 200  | 7.14s  | OK   |
+| glm-4.5-air        | 200  | 2.02s  | OK   |
+| DeepSeek-V4-Pro    | 400  | 2.03s  | not supported |
+| DeepSeek-V4.1-Flash| 404  | 0.39s  | fail |
+| deepseek-chat      | 503  | 0.34s  | fail |
+| gpt-4o-mini        | 503  | 0.30s  | fail |
+| glm-5.3            | 0    | 45s    | TIMEOUT 死通道 |
 
-## 二、为什么 Node 能连 WPF 不能连
-
-Node 走自带的 OpenSSL。WPF 进程走 .NET HttpClient，TLS 由系统 schannel 负责。
-本会话沙箱里 schannel 报 Win32Exception "安全包中没有可用的凭证" (SEC_E_NO_CREDENTIALS 0x8009030E)。
-这是 .NET HttpClient 在受限环境下的硬伤——即使把 SocketsHttpHandler.UseProxy 设为 false 也不绕开。
-
-诊断文件（dist\\diag.txt）实测抓到的堆栈：
-  type:   System.Net.Http.HttpRequestException
-  message: The SSL connection could not be established, see inner exception.
-  inner:   System.Security.Authentication.AuthenticationException :: Authentication failed, see inner exception.
-  inner:   System.ComponentModel.Win32Exception :: 安全包中没有可用的凭证
-  stack:  EstablishSslConnectionAsync -> ConnectAsync -> HttpConnectionPool ...
-  env HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897
-
-**用户在自己桌面双击时不会继承 https_proxy，但 schannel 受限问题同样可能在受控/企业环境出现。**
+关键发现：中继的 /models 目录里列出了 DeepSeek-V4-Pro，但 /chat 端实际并不接。
+因此 Models.Contains(_savedModel) == true 这种回退救不了，必须真正发一次探针。
 
 ## 三、本轮代码改动
 
-- HttpClient 改用 SocketsHttpHandler { UseProxy = false }，不再受 HTTPS_PROXY 拖入 schannel 失败链。
-- 构造函数末尾通过 Dispatcher.BeginInvoke 启动即拉一次模型列表，下拉立即有内容。
-- FetchModelsAsync / SendMessageAsync 失败时把 inner exception 与堆栈追加写入 dist\\diag.txt，
-  状态栏显示 "拉取失败：<inner type> :: <inner message>"，用户能直接看到根因。
-- 上一轮的配置读取修复（多路径打分 + 镜像保存）保留，本轮未动。
+新增 ProbeModelAsync(model)：对单个模型发一个 max_tokens=1 的极小请求，能用返回 true。
+
+FetchModelsAsync 拉完列表后：
+  - 若 _savedModel 在列表里 -> 调 ProbeModelAsync
+    - 成功 -> 保留 SelectedModel = _savedModel
+    - 失败 -> 清空 _savedModel，SelectedModel = Models.FirstOrDefault()，
+             状态栏显示 "已保存的 XXX 在该中继上实际不可用，已自动切换到 YYY"
+  - _savedModel 不在列表里 -> 保持原回退逻辑
 
 ## 四、改动文件
 
-1. E:\\WorkSpaces\\TrendIQ\\api-tester-wpf\\ViewModels\\MainViewModel.cs
-   哈希 0434679839827D336666D409F2DC28EDB68F2C78B9FEB6A8C21C00C7416F016D
+E:\\WorkSpaces\\TrendIQ\\api-tester-wpf\\ViewModels\\MainViewModel.cs
+哈希 93B92017515D0119FB3B35A4F8F065F67CDD0D2D79F99C4CDA599361A0ECD29B
 
-## 五、用户可立即做的两件事
+## 五、用户操作
 
-1. 把磁盘里保存的模型从 DeepSeek-V4-Pro 改成上面 ✅ 中的任意一个（推荐 auto 或 step-3.7-flash）。
-2. 如果桌面双击仍然报"安全包中没有可用的凭证"，说明 schannel 在该环境被禁用，
-   这是 .NET 进程层面的硬限制，需要在系统层修复 schannel 凭据（CSP/CryptoAPI 策略），
-   或者换用支持 OpenSSL 的客户端（如浏览器、Cursor 等）访问同一中继。
+1. 重新构建并发布后，到桌面双击 dist\\ApiTester.exe。
+2. 首次启动会自动拉模型 + 自动测活保存的那个模型。
+3. 状态栏出现 "已保存的 DeepSeek-V4-Pro 在该中继上实际不可用，已自动切换到 auto"
+   （或实际回退到的其他可用模型），下拉框自动选中 auto。
+4. 点发送消息即用 auto 调 /chat/completions，按 Node 实测会 200 成功。
 
-## 六、回滚
+无需手动改任何配置，无需重新选模型。
 
-E:\\WorkSpaces\\TrendIQ\\_fix\\ROLLBACK.ps1 已就绪。
+## 六、备选手工绕开
+
+手动把磁盘里 %APPDATA%\\ApiTester\\settings.json 的 SelectedModel 改成上面 OK 之一
+（推荐 auto 或 step-3.7-flash）。下次启动直接就是好模型，不需测活。
+
+## 七、回滚
+
+E:\\WorkSpaces\\TrendIQ\\_fix\\ROLLBACK.ps1 仍可用。
