@@ -254,6 +254,69 @@ namespace ApiTester.Wpf.ViewModels
             }
         }
 
+        /// <summary>从 /chat/completions 响应里抽出 content 与 reasoning_content 作为正文输出。
+        /// 用 JsonElement.GetString() 反转义，emoji / surrogate pair 都会还原成可显示字符，
+        /// 而不是再看 \uD83D\uDC4B 这种转义片段。完整原始 JSON 折叠在末尾以备排错。</summary>
+        private static string FormatAssistantReply(string json)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                var root = document.RootElement;
+                var sb = new StringBuilder();
+
+                if (root.TryGetProperty("choices", out var choices) &&
+                    choices.ValueKind == JsonValueKind.Array &&
+                    choices.GetArrayLength() > 0)
+                {
+                    var first = choices[0];
+                    if (first.TryGetProperty("message", out var msg) && msg.ValueKind == JsonValueKind.Object)
+                    {
+                        if (msg.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.String)
+                        {
+                            sb.AppendLine(content.GetString());
+                        }
+                        if (msg.TryGetProperty("reasoning_content", out var reasoning) && reasoning.ValueKind == JsonValueKind.String)
+                        {
+                            var r = reasoning.GetString();
+                            if (!string.IsNullOrWhiteSpace(r))
+                            {
+                                sb.AppendLine();
+                                sb.AppendLine("【思考过程】");
+                                sb.AppendLine(r);
+                            }
+                        }
+                    }
+                }
+
+                if (root.TryGetProperty("usage", out var usage) && usage.ValueKind == JsonValueKind.Object)
+                {
+                    sb.AppendLine();
+                    sb.Append("【用量】 prompt=");
+                    if (usage.TryGetProperty("prompt_tokens", out var pt)) sb.Append(pt.GetRawText());
+                    sb.Append(" completion=");
+                    if (usage.TryGetProperty("completion_tokens", out var ct)) sb.Append(ct.GetRawText());
+                    sb.Append(" total=");
+                    if (usage.TryGetProperty("total_tokens", out var tt)) sb.Append(tt.GetRawText());
+                    sb.AppendLine();
+                }
+
+                if (root.TryGetProperty("model", out var usedModel) && usedModel.ValueKind == JsonValueKind.String)
+                {
+                    sb.Append("【模型】 ").AppendLine(usedModel.GetString());
+                }
+
+                sb.AppendLine();
+                sb.AppendLine("【原始响应】");
+                sb.AppendLine(PrettyJson(json));
+                return sb.ToString();
+            }
+            catch
+            {
+                return PrettyJson(json);
+            }
+        }
+
         private async Task FetchModelsAsync()
         {
             if (IsBusy || string.IsNullOrWhiteSpace(ApiKey))
@@ -360,7 +423,7 @@ namespace ApiTester.Wpf.ViewModels
                 var json = await SendAsync(request);
                 stopwatch.Stop();
                 StatusText = $"请求完成 · {stopwatch.Elapsed.TotalSeconds:0.00}s";
-                OutputText = PrettyJson(json);
+                OutputText = FormatAssistantReply(json);
             }
             catch (Exception ex)
             {

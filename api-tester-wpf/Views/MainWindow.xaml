@@ -277,9 +277,13 @@
 
                     <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,18,14">
                         <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="模型（可选择或手动输入）" />
+                        <!-- ItemsSource 是 ModelItem 集合；用 DisplayMemberPath/SelectedValuePath 把显示与值都
+                             映射到 Name，SelectedModel 仍维持 string 双向绑定，类型/视觉双对。 -->
                         <ComboBox x:Name="ModelComboBox" Margin="0,6,0,0" Style="{StaticResource DarkComboBoxStyle}"
                                   ItemsSource="{Binding Models}"
-                                  SelectedItem="{Binding SelectedModel, UpdateSourceTrigger=PropertyChanged}" />
+                                  DisplayMemberPath="Name"
+                                  SelectedValuePath="Name"
+                                  SelectedValue="{Binding SelectedModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
 
                     <Border Grid.Row="1" Grid.Column="2" Margin="0,0,0,14" Background="{StaticResource FieldBrush}"
