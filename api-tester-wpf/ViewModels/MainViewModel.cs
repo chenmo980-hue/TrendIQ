@@ -364,7 +364,7 @@ namespace ApiTester.Wpf.ViewModels
                 };
                 using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
                 using var request = CreateRequest(HttpMethod.Post, "/chat/completions", content);
-                var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
+                var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(3));
                 using var response = await _httpClient.SendAsync(request, cts.Token);
                 if (!response.IsSuccessStatusCode)
                 {
