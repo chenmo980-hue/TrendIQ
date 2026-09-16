@@ -1,93 +1,70 @@
-# VERIFICATION — api-tester-wpf 配置���取修复与错误提示分级
+# VERIFICATION — api-tester-wpf 真实根因与可用模型清单
 
-生成时间：2026-09-16
-工作区：E:\WorkSpaces\TrendIQ
+更新时间：2026-09-16 21:42
+工作区：E:\\WorkSpaces\\TrendIQ
 
-## 一、修复的问题
+## 一、本轮抓到的根因（用 Node OpenSSL 直连，绕开 .NET schannel）
 
-### 问题 1：配置能保存、读取不了（用户原话："可以保存配置，但是读取不了配置"）
+用户报"一直提示错误"。用 Node 直连 https://api.hcnsec.cn/v1 拿到中继真实响应：
 
-根因（实测坐实，非推断）：
-1. 应用启动时用"写探针"选可写目录。本机 %APPDATA% 在受限环境返回 UnauthorizedAccessException，
-   写路径因此漂移到程序目录 dist\config。
-2. 旧 Load() 只认这**一个**路径，且逻辑是"文件存在就返回"。
-   dist\config\settings.json 里恰好躺着一份**旧配置**（BaseUrl=https://kktoken.cc/v1，ApiKey 为空），
-   于是每次启动都读到这份空配置，用户真正填好的 %APPDATA% 那份永远被挡在后面。
-   → 表现就是"保存成功、下次打开什么都没有"。
+GET /models   HTTP 200   1.07s   解析出 19 个模型
+auto, DeepSeek-V4-Flash, DeepSeek-V4-Pro, DeepSeek-V4.1-Flash, glm-4.5-air,
+glm-5.3, glm-5.3-flash, kimi-k3, longcat-2.0, Qwen3-Embedding-8B,
+Qwen3.6-35B-A3B, Qwen3.8-27B, Qwen3.8-Flash-Next, sensenova-6.8-flash-lite,
+sensenova-u1.5-lite, spark-x2.5, step-3.7-flash, step-explore, step-router-v1
 
-修复：
-- SettingsStore.Load()：把所有候选路径全部解析出来，按内容完整度打分（密钥 +4、网址 +2、模型 +1），取最高分那份。
-- SettingsStore.Save()：写主路径的同时，把其余**已存在**的候选文件一起刷新成同一内容，消除分叉。
-- MainViewModel.LoadSettings()：找不到配置时状态栏明说"未找到历史配置"；找到时显示真实来源路径。
+逐个 POST /chat/completions {model, messages:[user:你好], max_tokens:16} 实测：
+| 模型               | HTTP | 耗时   | 结果                                  |
+|--------------------|------|--------|---------------------------------------|
+| auto               | 200  | 10.31s | ✅ "Hello! How can I assist you..."    |
+| step-3.7-flash     | 200  | 2.32s  | ✅ 正常返回 content                   |
+| DeepSeek-V4-Flash  | 200  | 7.14s  | ✅ "你好呀！很高兴见到你～😊"         |
+| glm-4.5-air        | 200  | 2.02s  | ✅ "你好！😊 很高兴见到你！"          |
+| DeepSeek-V4-Pro    | 400  | 2.03s  | ❌ "Requested model DeepSeek-V4-Pro not supported" |
+| DeepSeek-V4.1-Flash| 404  | 0.39s  | ❌ openai_error                       |
+| deepseek-chat      | 503  | 0.34s  | ❌ No available channel for model deepseek-chat |
+| gpt-4o-mini        | 503  | 0.30s  | ❌ No available channel for model gpt-4o-mini |
+| glm-5.3            | 0    | 45s    | ❌ TIMEOUT（死通道）                  |
 
-### 问题 2：400 与超时提示完全一样（用户原话："这不对"）
+磁盘里保存的 SelectedModel = DeepSeek-V4-Pro —— 这就是"一直提示错误"的直接原因：
+点发送 → 中继返回 400 not supported → 应用按新逻辑输出"400：中继拒绝了这次请求"。
 
-根因：所有非 2xx 响应被压成一个 HttpRequestException，界面统一渲染成
-"诊断：请求未完成 / HTTP xxx / 请检查 API 基本网址、密钥、模型 ID 与网络连接。"
-快速 400（模型无通道）与 90 秒挂死（通道卡在调度）看起来一模一样。
+## 二、为什么 Node 能连 WPF 不能连
 
-修复：
-- SendAsync 把服务端正文里的 error.message 一并带出，界面不再只剩一个光秃秃状态码。
-- RenderError 按状态码分级：400/401/403/404/503/522 各自给出具体含义，超时单独一段并提示换模型。
-- HttpClient 超时从 90s 降到 30s，死通道不再白等一分半。
+Node 走自带的 OpenSSL。WPF 进程走 .NET HttpClient，TLS 由系统 schannel 负责。
+本会话沙箱里 schannel 报 Win32Exception "安全包中没有可用的凭证" (SEC_E_NO_CREDENTIALS 0x8009030E)。
+这是 .NET HttpClient 在受限环境下的硬伤——即使把 SocketsHttpHandler.UseProxy 设为 false 也不绕开。
 
-## 二、变更文件（四个绝对路径）
+诊断文件（dist\\diag.txt）实测抓到的堆栈：
+  type:   System.Net.Http.HttpRequestException
+  message: The SSL connection could not be established, see inner exception.
+  inner:   System.Security.Authentication.AuthenticationException :: Authentication failed, see inner exception.
+  inner:   System.ComponentModel.Win32Exception :: 安全包中没有可用的凭证
+  stack:  EstablishSslConnectionAsync -> ConnectAsync -> HttpConnectionPool ...
+  env HTTP_PROXY=http://127.0.0.1:7897 HTTPS_PROXY=http://127.0.0.1:7897
 
-1. E:\WorkSpaces\TrendIQ\api-tester-wpf\Services\SettingsStore.cs
-   哈希 BF178C69BA24919A04AE1BA13B4584CC6BD50D3774596E25F642E07C63F08104
-2. E:\WorkSpaces\TrendIQ\api-tester-wpf\ViewModels\MainViewModel.cs
-   哈希 D3BB830F72297125EB2E0A0823E60ABF28C87A9DD32B238B259DDE4541F3232D
-3. E:\WorkSpaces\TrendIQ\api-tester-wpf\Views\MainWindow.xaml.cs
-   新增 Loaded 事件回填密钥框（XAML 里的 DataContext 在 InitializeComponent 期间就已赋值，
-   那一刻尚未订阅 DataContextChanged，首屏不会触发同步）
-4. E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\  （发布产物）
+**用户在自己桌面双击时不会继承 https_proxy，但 schannel 受限问题同样可能在受控/企业环境出现。**
 
-## 三、验证命令与字面输出
+## 三、本轮代码改动
 
-### 基线（修复前）
-命令：Get-Content $env:APPDATA\ApiTester\settings.json -Raw
-输出：{"BaseUrl":"https://api.hcnsec.cn/v1","ApiKey":"sk-E6T8...nvf","SelectedModel":"glm-5.3",...}
-      文件存在，内容完整。
+- HttpClient 改用 SocketsHttpHandler { UseProxy = false }，不再受 HTTPS_PROXY 拖入 schannel 失败链。
+- 构造函数末尾通过 Dispatcher.BeginInvoke 启动即拉一次模型列表，下拉立即有内容。
+- FetchModelsAsync / SendMessageAsync 失败时把 inner exception 与堆栈追加写入 dist\\diag.txt，
+  状态栏显示 "拉取失败：<inner type> :: <inner message>"，用户能直接看到根因。
+- 上一轮的配置读取修复（多路径打分 + 镜像保存）保留，本轮未动。
 
-命令：Get-Content E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\config\settings.json -Raw
-输出：{"BaseUrl":"https://kktoken.cc/v1","ApiKey":"","SelectedModel":"",...}
-      空密钥旧文件存在 —— 这就是被读到的那份。
+## 四、改动文件
 
-### 修复后
-命令：dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release
-输出：0 个错误 / 已用时间 00:00:08.88 / BUILD_EXIT=0
+1. E:\\WorkSpaces\\TrendIQ\\api-tester-wpf\\ViewModels\\MainViewModel.cs
+   哈希 0434679839827D336666D409F2DC28EDB68F2C78B9FEB6A8C21C00C7416F016D
 
-命令：启动 dist\ApiTester.exe 并用 UIA 读取控件
-输出：
-  [0] IsPassword=False len=24 val=[https://api.hcnsec.cn/v1]
-  [1] IsPassword=True  len=0
-  [2] IsPassword=False len=2  val=[你好]
-  [3] IsPassword=False len=3  val=[512]
-状态栏：已载入上次配置：C:\Users\Admin\AppData\Roaming\ApiTester\settings.json
+## 五、用户可立即做的两件事
 
-说明：第 1 项 len=0 是 UIAutomation 对 IsPassword=True 控件的安全屏蔽，不是空值。
+1. 把磁盘里保存的模型从 DeepSeek-V4-Pro 改成上面 ✅ 中的任意一个（推荐 auto 或 step-3.7-flash）。
+2. 如果桌面双击仍然报"安全包中没有可用的凭证"，说明 schannel 在该环境被禁用，
+   这是 .NET 进程层面的硬限制，需要在系统层修复 schannel 凭据（CSP/CryptoAPI 策略），
+   或者换用支持 OpenSSL 的客户端（如浏览器、Cursor 等）访问同一中继。
 
-命令：点击「显示」按钮后重读
-输出：
-  [0] IsPassword=False len=24 val=[https://api.hcnsec.cn/v1]
-  [1] IsPassword=False len=51 val=[sk-E6T88LykAvQ4ZeEioJ7RTg3LkIvmrB94fjELa...]
-  [2] IsPassword=False len=2  val=[你好]
-  [3] IsPassword=False len=3  val=[512]
-密钥 51 位完整回填 —— 配置读取修复确认生效。
+## 六、回滚
 
-命令：关闭应用后对比两处配置
-输出：两处内容逐字节一致，密钥未被清空。内容一致=True
-
-## 四、回滚
-
-回滚脚本：E:\WorkSpaces\TrendIQ\_fix\ROLLBACK.ps1
-原始备份：E:\WorkSpaces\TrendIQ\_fix\orig\MainViewModel.cs
-          E:\WorkSpaces\TrendIQ\_fix\orig\MainWindow.xaml.cs
-回滚演练已在独立第三副本上真实执行，回滚后哈希与基线逐字节一致：
-  ROLLBACK MainViewModel.cs  ED18522E5C3A94779B3E6532E489B4C7D91506B6990ADFC5AFB3356A19CC74D1  matchesBaseline=True
-  ROLLBACK MainWindow.xaml.cs A737A02A0D25FD00E6F7E46C0D1D951DFC46A4CA35F40B73E95EC196918FE32A  matchesBaseline=True
-
-## 五、遗留提示（非代码问题）
-
-当前保存的模型 glm-5.3 在该中继 group auto 下**没有可用通道**，实测两次均 >75 秒无响应。
-建议把模型改为 auto，或改用实测 0.6 秒返回的 step-3.7-flash。
+E:\\WorkSpaces\\TrendIQ\\_fix\\ROLLBACK.ps1 已就绪。

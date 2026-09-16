@@ -14,7 +14,18 @@ namespace ApiTester.Wpf.ViewModels
 {
     public sealed class MainViewModel : ViewModelBase
     {
-        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+        // 默认走直连：环境里 https_proxy 配错时，CONNECT 隧道后的 schannel 握手会拿不到客户端凭据
+        // （SEC_E_NO_CREDENTIALS 0x8009030E），把整套 HTTPS 请求都拖死。如果以后真的要代理，
+        // 改成读配置 BaseUrl 同目录下的 proxy.txt，不要走系统代理继承。
+        private readonly HttpClient _httpClient = new HttpClient(new SocketsHttpHandler
+        {
+            UseProxy = false,
+            UseCookies = false,
+            AllowAutoRedirect = true,
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(30)
+        };
         private readonly SettingsStore _settingsStore = new();
         private DispatcherTimer? _saveTimer;
         private bool _isLoadingSettings;
@@ -35,6 +46,18 @@ namespace ApiTester.Wpf.ViewModels
             ClearOutputCommand = new DelegateCommand(_ => ClearOutput());
             SaveSettingsCommand = new DelegateCommand(_ => PersistSettings(true));
             LoadSettings();
+            // 启动即拉一次模型列表：用户一进界面下拉就有可用集合，
+            // 不会因“没拉过模型就用了一个保存下来的坏模型”而一直提示错误。
+            // 等价于手动点“拉取模型”按钮，但省去用户去找按钮这一步。
+            System.Windows.Threading.Dispatcher.CurrentDispatcher.BeginInvoke(
+                new Action(async () => await AutoFetchModelsOnStartupAsync()),
+                System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        private async Task AutoFetchModelsOnStartupAsync()
+        {
+            if (string.IsNullOrWhiteSpace(ApiKey)) { return; }
+            await FetchModelsAsync();
         }
 
         public string BaseUrl
@@ -221,7 +244,10 @@ namespace ApiTester.Wpf.ViewModels
             }
             catch (Exception ex)
             {
-                StatusText = "拉取失败";
+                WriteDiag("FetchModels failed", ex);
+                var inner = ex.InnerException;
+                var detail = inner is null ? ex.Message : (inner.GetType().Name + " :: " + inner.Message);
+                StatusText = "拉取失败：" + detail;
                 OutputText = RenderError(ex);
             }
             finally
@@ -274,12 +300,42 @@ namespace ApiTester.Wpf.ViewModels
             }
             catch (Exception ex)
             {
-                StatusText = "发送失败";
+                WriteDiag("SendMessage failed", ex);
+                var inner = ex.InnerException;
+                var detail = inner is null ? ex.Message : (inner.GetType().Name + " :: " + inner.Message);
+                StatusText = "发送失败：" + detail;
                 OutputText = RenderError(ex);
             }
             finally
             {
                 IsBusy = false;
+            }
+        }
+
+        private static readonly string DiagPath = System.IO.Path.Combine(AppContext.BaseDirectory, "diag.txt");
+
+        /// <summary>把异常完整堆栈和 inner exception 追加到 diag.txt，给排查“一直报错”用。</summary>
+        private static void WriteDiag(string tag, Exception ex)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append('[').Append(DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff")).Append("] ").AppendLine(tag);
+                sb.AppendLine("  type:   " + ex.GetType().FullName);
+                sb.AppendLine("  message: " + ex.Message);
+                for (var inner = ex.InnerException; inner != null; inner = inner.InnerException)
+                {
+                    sb.AppendLine("  inner:   " + inner.GetType().FullName + " :: " + inner.Message);
+                }
+                sb.AppendLine("  stack:  " + ex.StackTrace);
+                sb.AppendLine("  env HTTP_PROXY=" + (Environment.GetEnvironmentVariable("HTTP_PROXY") ?? "<null>")
+                    + " HTTPS_PROXY=" + (Environment.GetEnvironmentVariable("HTTPS_PROXY") ?? "<null>")
+                    + " NO_PROXY=" + (Environment.GetEnvironmentVariable("NO_PROXY") ?? "<null>"));
+                System.IO.File.AppendAllText(DiagPath, sb.ToString());
+            }
+            catch
+            {
+                // 诊断写不进去也不能再抛。
             }
         }
 
