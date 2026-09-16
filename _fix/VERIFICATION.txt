@@ -1,0 +1,93 @@
+# VERIFICATION — api-tester-wpf 配置���取修复与错误提示分级
+
+生成时间：2026-09-16
+工作区：E:\WorkSpaces\TrendIQ
+
+## 一、修复的问题
+
+### 问题 1：配置能保存、读取不了（用户原话："可以保存配置，但是读取不了配置"）
+
+根因（实测坐实，非推断）：
+1. 应用启动时用"写探针"选可写目录。本机 %APPDATA% 在受限环境返回 UnauthorizedAccessException，
+   写路径因此漂移到程序目录 dist\config。
+2. 旧 Load() 只认这**一个**路径，且逻辑是"文件存在就返回"。
+   dist\config\settings.json 里恰好躺着一份**旧配置**（BaseUrl=https://kktoken.cc/v1，ApiKey 为空），
+   于是每次启动都读到这份空配置，用户真正填好的 %APPDATA% 那份永远被挡在后面。
+   → 表现就是"保存成功、下次打开什么都没有"。
+
+修复：
+- SettingsStore.Load()：把所有候选路径全部解析出来，按内容完整度打分（密钥 +4、网址 +2、模型 +1），取最高分那份。
+- SettingsStore.Save()：写主路径的同时，把其余**已存在**的候选文件一起刷新成同一内容，消除分叉。
+- MainViewModel.LoadSettings()：找不到配置时状态栏明说"未找到历史配置"；找到时显示真实来源路径。
+
+### 问题 2：400 与超时提示完全一样（用户原话："这不对"）
+
+根因：所有非 2xx 响应被压成一个 HttpRequestException，界面统一渲染成
+"诊断：请求未完成 / HTTP xxx / 请检查 API 基本网址、密钥、模型 ID 与网络连接。"
+快速 400（模型无通道）与 90 秒挂死（通道卡在调度）看起来一模一样。
+
+修复：
+- SendAsync 把服务端正文里的 error.message 一并带出，界面不再只剩一个光秃秃状态码。
+- RenderError 按状态码分级：400/401/403/404/503/522 各自给出具体含义，超时单独一段并提示换模型。
+- HttpClient 超时从 90s 降到 30s，死通道不再白等一分半。
+
+## 二、变更文件（四个绝对路径）
+
+1. E:\WorkSpaces\TrendIQ\api-tester-wpf\Services\SettingsStore.cs
+   哈希 BF178C69BA24919A04AE1BA13B4584CC6BD50D3774596E25F642E07C63F08104
+2. E:\WorkSpaces\TrendIQ\api-tester-wpf\ViewModels\MainViewModel.cs
+   哈希 D3BB830F72297125EB2E0A0823E60ABF28C87A9DD32B238B259DDE4541F3232D
+3. E:\WorkSpaces\TrendIQ\api-tester-wpf\Views\MainWindow.xaml.cs
+   新增 Loaded 事件回填密钥框（XAML 里的 DataContext 在 InitializeComponent 期间就已赋值，
+   那一刻尚未订阅 DataContextChanged，首屏不会触发同步）
+4. E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\  （发布产物）
+
+## 三、验证命令与字面输出
+
+### 基线（修复前）
+命令：Get-Content $env:APPDATA\ApiTester\settings.json -Raw
+输出：{"BaseUrl":"https://api.hcnsec.cn/v1","ApiKey":"sk-E6T8...nvf","SelectedModel":"glm-5.3",...}
+      文件存在，内容完整。
+
+命令：Get-Content E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\config\settings.json -Raw
+输出：{"BaseUrl":"https://kktoken.cc/v1","ApiKey":"","SelectedModel":"",...}
+      空密钥旧文件存在 —— 这就是被读到的那份。
+
+### 修复后
+命令：dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release
+输出：0 个错误 / 已用时间 00:00:08.88 / BUILD_EXIT=0
+
+命令：启动 dist\ApiTester.exe 并用 UIA 读取控件
+输出：
+  [0] IsPassword=False len=24 val=[https://api.hcnsec.cn/v1]
+  [1] IsPassword=True  len=0
+  [2] IsPassword=False len=2  val=[你好]
+  [3] IsPassword=False len=3  val=[512]
+状态栏：已载入上次配置：C:\Users\Admin\AppData\Roaming\ApiTester\settings.json
+
+说明：第 1 项 len=0 是 UIAutomation 对 IsPassword=True 控件的安全屏蔽，不是空值。
+
+命令：点击「显示」按钮后重读
+输出：
+  [0] IsPassword=False len=24 val=[https://api.hcnsec.cn/v1]
+  [1] IsPassword=False len=51 val=[sk-E6T88LykAvQ4ZeEioJ7RTg3LkIvmrB94fjELa...]
+  [2] IsPassword=False len=2  val=[你好]
+  [3] IsPassword=False len=3  val=[512]
+密钥 51 位完整回填 —— 配置读取修复确认生效。
+
+命令：关闭应用后对比两处配置
+输出：两处内容逐字节一致，密钥未被清空。内容一致=True
+
+## 四、回滚
+
+回滚脚本：E:\WorkSpaces\TrendIQ\_fix\ROLLBACK.ps1
+原始备份：E:\WorkSpaces\TrendIQ\_fix\orig\MainViewModel.cs
+          E:\WorkSpaces\TrendIQ\_fix\orig\MainWindow.xaml.cs
+回滚演练已在独立第三副本上真实执行，回滚后哈希与基线逐字节一致：
+  ROLLBACK MainViewModel.cs  ED18522E5C3A94779B3E6532E489B4C7D91506B6990ADFC5AFB3356A19CC74D1  matchesBaseline=True
+  ROLLBACK MainWindow.xaml.cs A737A02A0D25FD00E6F7E46C0D1D951DFC46A4CA35F40B73E95EC196918FE32A  matchesBaseline=True
+
+## 五、遗留提示（非代码问题）
+
+当前保存的模型 glm-5.3 在该中继 group auto 下**没有可用通道**，实测两次均 >75 秒无响应。
+建议把模型改为 auto，或改用实测 0.6 秒返回的 step-3.7-flash。

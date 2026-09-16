@@ -14,7 +14,7 @@ namespace ApiTester.Wpf.ViewModels
 {
     public sealed class MainViewModel : ViewModelBase
     {
-        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(30) };
+        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
         private readonly SettingsStore _settingsStore = new();
         private DispatcherTimer? _saveTimer;
         private bool _isLoadingSettings;
@@ -26,7 +26,6 @@ namespace ApiTester.Wpf.ViewModels
         private string _selectedModel = string.Empty;
         private string _message = "你好";
         private string _maxTokensText = "512";
-        private string _savedModel = string.Empty;
 
         public MainViewModel()
         {
@@ -142,27 +141,7 @@ namespace ApiTester.Wpf.ViewModels
             var raw = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
-                // 把服务端正文里的 error.message 一并带出来，否则界面只剩一个光秃秃的状态码，
-                // 400 与“通道挂了”看起来毫无区别。
-                var detail = raw;
-                try
-                {
-                    using var document = JsonDocument.Parse(raw);
-                    if (document.RootElement.TryGetProperty("error", out var error) &&
-                        error.TryGetProperty("message", out var errorMessage))
-                    {
-                        detail = errorMessage.GetString() ?? raw;
-                    }
-                }
-                catch
-                {
-                    // 非 JSON 响应，保留原文。
-                }
-
-                throw new HttpRequestException(
-                    $"HTTP {(int)response.StatusCode} {response.ReasonPhrase} · {detail}",
-                    null,
-                    response.StatusCode);
+                throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
             }
             return raw;
         }
@@ -210,10 +189,6 @@ namespace ApiTester.Wpf.ViewModels
                     }
                 }
                 SelectedModel = Models.FirstOrDefault() ?? string.Empty;
-                if (!string.IsNullOrWhiteSpace(_savedModel) && Models.Contains(_savedModel))
-                {
-                    SelectedModel = _savedModel;
-                }
                 StatusText = Models.Count > 0
                     ? $"已加载 {Models.Count} 个模型 · {stopwatch.Elapsed.TotalSeconds:0.00}s"
                     : $"接口返回 0 个模型 · {stopwatch.Elapsed.TotalSeconds:0.00}s";
@@ -285,36 +260,12 @@ namespace ApiTester.Wpf.ViewModels
 
         private static string RenderError(Exception exception)
         {
-            if (exception is OperationCanceledException || exception is TimeoutException)
+            var message = exception.Message;
+            if (exception is HttpRequestException http && http.StatusCode == System.Net.HttpStatusCode.Forbidden)
             {
-                return "诊断：请求未完成\n" + exception.Message +
-                    "\n\n请求超过了客户端超时上限。这条中继上有些模型名在目录里、但当前分组下没有可用通道，" +
-                    "请求会一直挂在队列里直到超时。换一个模型重试。";
+                message = "HTTP 403 · 服务商拒绝了本次请求。若响应中包含 Cloudflare 1010，请检查客户端指纹或服务商入口。";
             }
-
-            if (exception is HttpRequestException http)
-            {
-                var reason = http.StatusCode switch
-                {
-                    System.Net.HttpStatusCode.BadRequest =>
-                        "400：中继拒绝了这次请求。正文通常写明 Requested model ... not supported，即该模型不受支持。",
-                    System.Net.HttpStatusCode.Unauthorized =>
-                        "401：密钥无效或已被撤销。",
-                    System.Net.HttpStatusCode.Forbidden =>
-                        "403：账号没有该模型的权限，或额度/订单已失效；若响应含 Cloudflare 1010，则为客户端指纹被拒。",
-                    System.Net.HttpStatusCode.NotFound =>
-                        "404：中继上没有这个模型的可用通道。",
-                    System.Net.HttpStatusCode.ServiceUnavailable =>
-                        "503：当前分组下没有可用渠道，换模型或稍后重试。",
-                    (System.Net.HttpStatusCode)522 =>
-                        "522：上游连接超时，该模型的通道已经挂掉。",
-                    _ =>
-                        "请检查 API 基本网址、密钥、模型 ID 与网络连接。"
-                };
-                return "诊断：请求未完成\n" + http.Message + "\n\n" + reason;
-            }
-
-            return "诊断：请求未完成\n" + exception.Message + "\n\n请检查 API 基本网址、密钥、模型 ID 与网络连接。";
+            return "诊断：请求未完成\n" + message + "\n\n请检查 API 基本网址、密钥、模型 ID 与网络连接。";
         }
 
         private void ClearOutput()
@@ -331,7 +282,7 @@ namespace ApiTester.Wpf.ViewModels
             {
                 BaseUrl = BaseUrl,
                 ApiKey = ApiKey,
-                SelectedModel = string.IsNullOrWhiteSpace(SelectedModel) ? _savedModel : SelectedModel,
+                SelectedModel = SelectedModel,
                 MaxTokens = MaxTokensText,
                 Message = Message
             });
@@ -350,7 +301,6 @@ namespace ApiTester.Wpf.ViewModels
             var settings = _settingsStore.Load();
             if (settings is null)
             {
-                StatusText = "未找到历史配置，当前为默认值";
                 return;
             }
 
@@ -369,9 +319,6 @@ namespace ApiTester.Wpf.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(settings.SelectedModel))
                 {
-                    // 此刻 Models 还是空的，ComboBox 会把 SelectedItem 置空并回写 "",
-                    // 所以真正的选中要等模型列表拉回来之后再补。
-                    _savedModel = settings.SelectedModel!;
                     SelectedModel = settings.SelectedModel!;
                 }
 
@@ -390,9 +337,7 @@ namespace ApiTester.Wpf.ViewModels
                 _isLoadingSettings = false;
             }
 
-            StatusText = string.IsNullOrWhiteSpace(_settingsStore.LoadedFromPath)
-                ? "已载入上次配置"
-                : "已载入上次配置：" + _settingsStore.LoadedFromPath;
+            StatusText = "已载入上次配置";
         }
 
         /// <summary>输入停止约 0.8 秒后自动落盘，避免逐字写文件。</summary>

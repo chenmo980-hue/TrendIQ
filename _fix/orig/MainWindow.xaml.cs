@@ -14,17 +14,6 @@ namespace ApiTester.Wpf.Views
             InitializeComponent();
             DataContextChanged += OnDataContextChanged;
             Closing += OnWindowClosing;
-
-            // XAML 里的 <DMSkinWindow.DataContext> 在 InitializeComponent() 期间就已经赋值，
-            // 那一刻本类尚未订阅 DataContextChanged，所以首屏不会触发同步——
-            // 表现为：密钥明明存在磁盘上，输入框却是空的。
-            Loaded += (sender, args) =>
-            {
-                if (DataContext is MainViewModel viewModel)
-                {
-                    SyncApiKeyBoxes(viewModel);
-                }
-            };
         }
 
         private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
