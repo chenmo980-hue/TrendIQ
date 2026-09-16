@@ -45,6 +45,10 @@ api-tester/build/
 api-tester/dist/
 api-tester/*.spec
 
+# WPF 桌面应用构建产物
+api-tester-wpf/bin/
+api-tester-wpf/obj/
+
 # VideoDownloader build artifacts
 VideoDownloader/bin/
 VideoDownloader/obj/

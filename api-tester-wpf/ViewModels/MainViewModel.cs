@@ -1,0 +1,247 @@
+using DMSkin.Core;
+using System;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading.Tasks;
+using System.Windows.Input;
+
+namespace ApiTester.Wpf.ViewModels
+{
+    public sealed class MainViewModel : ViewModelBase
+    {
+        private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
+        private string _baseUrl = "https://kktoken.cc/v1";
+        private string _apiKey = string.Empty;
+        private bool _isBusy;
+        private string _statusText = "就绪";
+        private string _outputText = string.Empty;
+        private string _selectedModel = string.Empty;
+        private string _message = "Reply with OK.";
+        private string _maxTokensText = "512";
+
+        public MainViewModel()
+        {
+            FetchModelsCommand = new DelegateCommand(async _ => await FetchModelsAsync());
+            SendMessageCommand = new DelegateCommand(async _ => await SendMessageAsync());
+            ClearOutputCommand = new DelegateCommand(_ => ClearOutput());
+        }
+
+        public string BaseUrl
+        {
+            get => _baseUrl;
+            set => SetProperty(ref _baseUrl, value?.Trim() ?? string.Empty);
+        }
+
+        public string ApiKey
+        {
+            get => _apiKey;
+            set => SetProperty(ref _apiKey, value ?? string.Empty);
+        }
+
+        public bool IsBusy
+        {
+            get => _isBusy;
+            set => SetProperty(ref _isBusy, value);
+        }
+
+        public string StatusText
+        {
+            get => _statusText;
+            set => SetProperty(ref _statusText, value);
+        }
+
+        public string OutputText
+        {
+            get => _outputText;
+            set => SetProperty(ref _outputText, value);
+        }
+
+        public ObservableCollection<string> Models { get; } = new();
+
+        public string SelectedModel
+        {
+            get => _selectedModel;
+            set => SetProperty(ref _selectedModel, value ?? string.Empty);
+        }
+
+        public string Message
+        {
+            get => _message;
+            set => SetProperty(ref _message, value ?? string.Empty);
+        }
+
+        public string MaxTokensText
+        {
+            get => _maxTokensText;
+            set => SetProperty(ref _maxTokensText, value ?? "512");
+        }
+
+        public ICommand FetchModelsCommand { get; }
+        public ICommand SendMessageCommand { get; }
+        public ICommand ClearOutputCommand { get; }
+
+        private string Url(string path)
+        {
+            var baseUri = BaseUrl.Trim().TrimEnd('/');
+            return baseUri + "/" + path.TrimStart('/');
+        }
+
+        private HttpRequestMessage CreateRequest(HttpMethod method, string path, HttpContent? content = null)
+        {
+            var request = new HttpRequestMessage(method, Url(path)) { Content = content };
+            request.Headers.Add("Authorization", "Bearer " + ApiKey.Trim());
+            request.Headers.Add("Accept", "application/json");
+            return request;
+        }
+
+        private async Task<string> SendAsync(HttpRequestMessage request)
+        {
+            using var response = await _httpClient.SendAsync(request);
+            var raw = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+            }
+            return raw;
+        }
+
+        private static string PrettyJson(string json)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch
+            {
+                return json;
+            }
+        }
+
+        private async Task FetchModelsAsync()
+        {
+            if (IsBusy || string.IsNullOrWhiteSpace(ApiKey))
+            {
+                StatusText = string.IsNullOrWhiteSpace(ApiKey) ? "请先填写 API 密钥" : "请求中...";
+                return;
+            }
+
+            IsBusy = true;
+            StatusText = "正在拉取模型...";
+            OutputText = string.Empty;
+            try
+            {
+                var stopwatch = Stopwatch.StartNew();
+                using var request = CreateRequest(HttpMethod.Get, "/models");
+                var json = await SendAsync(request);
+                stopwatch.Stop();
+                using var document = JsonDocument.Parse(json);
+                Models.Clear();
+                if (document.RootElement.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in data.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var id) && !string.IsNullOrWhiteSpace(id.GetString()))
+                        {
+                            Models.Add(id.GetString()!);
+                        }
+                    }
+                }
+                SelectedModel = Models.FirstOrDefault() ?? string.Empty;
+                StatusText = Models.Count > 0
+                    ? $"已加载 {Models.Count} 个模型 · {stopwatch.Elapsed.TotalSeconds:0.00}s"
+                    : $"接口返回 0 个模型 · {stopwatch.Elapsed.TotalSeconds:0.00}s";
+                OutputText = PrettyJson(json);
+            }
+            catch (Exception ex)
+            {
+                StatusText = "拉取失败";
+                OutputText = RenderError(ex);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private async Task SendMessageAsync()
+        {
+            if (IsBusy) return;
+            if (string.IsNullOrWhiteSpace(ApiKey))
+            {
+                StatusText = "请先填写 API 密钥";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(SelectedModel))
+            {
+                StatusText = "请选择或输入模型";
+                return;
+            }
+            if (!int.TryParse(MaxTokensText, out var maxTokens) || maxTokens < 1)
+            {
+                StatusText = "最大输出 token 必须是正整数";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(Message))
+            {
+                StatusText = "请输入消息内容";
+                return;
+            }
+
+            IsBusy = true;
+            StatusText = "正在发送...";
+            try
+            {
+                var stopwatch = Stopwatch.StartNew();
+                var payload = new
+                {
+                    model = SelectedModel,
+                    messages = new[] { new { role = "user", content = Message } },
+                    max_tokens = maxTokens
+                };
+                using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var request = CreateRequest(HttpMethod.Post, "/chat/completions", content);
+                var json = await SendAsync(request);
+                stopwatch.Stop();
+                StatusText = $"请求完成 · {stopwatch.Elapsed.TotalSeconds:0.00}s";
+                OutputText = PrettyJson(json);
+            }
+            catch (Exception ex)
+            {
+                StatusText = "发送失败";
+                OutputText = RenderError(ex);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
+        private static string RenderError(Exception exception)
+        {
+            var message = exception.Message;
+            if (exception is HttpRequestException http && http.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                message = "HTTP 403 · 服务商拒绝了本次请求。若响应中包含 Cloudflare 1010，请检查客户端指纹或服务商入口。";
+            }
+            return "诊断：请求未完成\n" + message + "\n\n请检查 API 基本网址、密钥、模型 ID 与网络连接。";
+        }
+
+        private void ClearOutput()
+        {
+            OutputText = string.Empty;
+            StatusText = "就绪";
+        }
+
+        private bool SetProperty<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)
+        {
+            if (Equals(field, value)) return false;
+            field = value;
+            OnPropertyChanged(propertyName);
+            return true;
+        }
+    }
+}
