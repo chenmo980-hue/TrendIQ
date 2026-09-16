@@ -104,5 +104,13 @@ namespace ApiTester.Wpf.Views
             }
             _revealingKey = false;
         }
+
+        private void ModelTag_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.FrameworkElement fe && fe.Tag is string model && DataContext is MainViewModel vm)
+            {
+                vm.SelectModelFromTag(model);
+            }
+        }
     }
 }

@@ -145,6 +145,27 @@ namespace ApiTester.Wpf.ViewModels
         public ICommand ClearOutputCommand { get; }
         public ICommand SaveSettingsCommand { get; }
 
+        /// <summary>从 WrapPanel 标签点击时调用：先选中，立即探活，失败回滚并提示。</summary>
+        public async void SelectModelFromTag(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model) || model == _selectedModel) { return; }
+            var previous = _selectedModel;
+            SelectedModel = model;
+            StatusText = "正在验证 " + model + " ...";
+            var ok = await ProbeModelAsync(model);
+            if (ok)
+            {
+                StatusText = "已选 " + model + "，探活通过";
+            }
+            else
+            {
+                // 联动校验：标签点击切了 SelectedModel，探活失败说明该模型实际不可用，
+                // 回滚避免用户进死路。状态栏给出明确原因。
+                SelectedModel = previous;
+                StatusText = model + " 在该中继上不可用，已回退到 " + previous;
+            }
+        }
+
         private string Url(string path)
         {
             var baseUri = BaseUrl.Trim().TrimEnd('/');
@@ -190,12 +211,20 @@ namespace ApiTester.Wpf.ViewModels
             return raw;
         }
 
+        private static readonly JsonSerializerOptions PrettyJsonOptions = new()
+        {
+            WriteIndented = true,
+            // 默认 Encoder 会把所有非 ASCII 字符转义成 \uXXXX，输出框里看到的就不是
+            // 中文而是 “\u4F60\u597D”。UnsafeRelaxedJsonEscaping 让中文原样输出。
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         private static string PrettyJson(string json)
         {
             try
             {
                 using var document = JsonDocument.Parse(json);
-                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
+                return JsonSerializer.Serialize(document.RootElement, PrettyJsonOptions);
             }
             catch
             {

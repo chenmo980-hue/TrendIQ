@@ -303,9 +303,26 @@
                                 </ItemsControl.ItemsPanel>
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Margin="0,0,8,8" Padding="9,6" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="5">
+                                        <Button Margin="0,0,8,8" Padding="9,6" Cursor="Hand"
+                                                Click="ModelTag_Click" Tag="{Binding}"
+                                                Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border x:Name="Bd" Padding="{TemplateBinding Padding}" CornerRadius="5"
+                                                            Background="{TemplateBinding Background}"
+                                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="Bd" Property="Background" Value="#243757" />
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Button.Template>
                                             <TextBlock Foreground="#CBD5E1" Text="{Binding}" FontFamily="Consolas" FontSize="12" />
-                                        </Border>
+                                        </Button>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
