@@ -1,3 +1,4 @@
+using ApiTester.Wpf.Services;
 using DMSkin.Core;
 using System;
 using System.Collections.ObjectModel;
@@ -7,19 +8,23 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace ApiTester.Wpf.ViewModels
 {
     public sealed class MainViewModel : ViewModelBase
     {
         private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
+        private readonly SettingsStore _settingsStore = new();
+        private DispatcherTimer? _saveTimer;
+        private bool _isLoadingSettings;
         private string _baseUrl = "https://kktoken.cc/v1";
         private string _apiKey = string.Empty;
         private bool _isBusy;
         private string _statusText = "就绪";
         private string _outputText = string.Empty;
         private string _selectedModel = string.Empty;
-        private string _message = "Reply with OK.";
+        private string _message = "你好";
         private string _maxTokensText = "512";
 
         public MainViewModel()
@@ -27,18 +32,32 @@ namespace ApiTester.Wpf.ViewModels
             FetchModelsCommand = new DelegateCommand(async _ => await FetchModelsAsync());
             SendMessageCommand = new DelegateCommand(async _ => await SendMessageAsync());
             ClearOutputCommand = new DelegateCommand(_ => ClearOutput());
+            SaveSettingsCommand = new DelegateCommand(_ => PersistSettings(true));
+            LoadSettings();
         }
 
         public string BaseUrl
         {
             get => _baseUrl;
-            set => SetProperty(ref _baseUrl, value?.Trim() ?? string.Empty);
+            set
+            {
+                if (SetProperty(ref _baseUrl, value?.Trim() ?? string.Empty))
+                {
+                    ScheduleSave();
+                }
+            }
         }
 
         public string ApiKey
         {
             get => _apiKey;
-            set => SetProperty(ref _apiKey, value ?? string.Empty);
+            set
+            {
+                if (SetProperty(ref _apiKey, value ?? string.Empty))
+                {
+                    ScheduleSave();
+                }
+            }
         }
 
         public bool IsBusy
@@ -64,24 +83,43 @@ namespace ApiTester.Wpf.ViewModels
         public string SelectedModel
         {
             get => _selectedModel;
-            set => SetProperty(ref _selectedModel, value ?? string.Empty);
+            set
+            {
+                if (SetProperty(ref _selectedModel, value ?? string.Empty))
+                {
+                    ScheduleSave();
+                }
+            }
         }
 
         public string Message
         {
             get => _message;
-            set => SetProperty(ref _message, value ?? string.Empty);
+            set
+            {
+                if (SetProperty(ref _message, value ?? string.Empty))
+                {
+                    ScheduleSave();
+                }
+            }
         }
 
         public string MaxTokensText
         {
             get => _maxTokensText;
-            set => SetProperty(ref _maxTokensText, value ?? "512");
+            set
+            {
+                if (SetProperty(ref _maxTokensText, value ?? "512"))
+                {
+                    ScheduleSave();
+                }
+            }
         }
 
         public ICommand FetchModelsCommand { get; }
         public ICommand SendMessageCommand { get; }
         public ICommand ClearOutputCommand { get; }
+        public ICommand SaveSettingsCommand { get; }
 
         private string Url(string path)
         {
@@ -234,6 +272,95 @@ namespace ApiTester.Wpf.ViewModels
         {
             OutputText = string.Empty;
             StatusText = "就绪";
+        }
+
+        /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>
+        public void PersistSettings(bool report)
+        {
+            _saveTimer?.Stop();
+            var saved = _settingsStore.Save(new AppSettings
+            {
+                BaseUrl = BaseUrl,
+                ApiKey = ApiKey,
+                SelectedModel = SelectedModel,
+                MaxTokens = MaxTokensText,
+                Message = Message
+            });
+
+            if (report)
+            {
+                StatusText = saved
+                    ? "配置已保存：" + _settingsStore.FilePath
+                    : "配置已保存到内存（当前目录不可写）";
+            }
+        }
+
+        /// <summary>启动时把上次保存的配置读回界面。</summary>
+        private void LoadSettings()
+        {
+            var settings = _settingsStore.Load();
+            if (settings is null)
+            {
+                return;
+            }
+
+            _isLoadingSettings = true;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
+                {
+                    BaseUrl = settings.BaseUrl!;
+                }
+
+                if (settings.ApiKey is not null)
+                {
+                    ApiKey = settings.ApiKey;
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.SelectedModel))
+                {
+                    SelectedModel = settings.SelectedModel!;
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.MaxTokens))
+                {
+                    MaxTokensText = settings.MaxTokens!;
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.Message))
+                {
+                    Message = settings.Message!;
+                }
+            }
+            finally
+            {
+                _isLoadingSettings = false;
+            }
+
+            StatusText = "已载入上次配置";
+        }
+
+        /// <summary>输入停止约 0.8 秒后自动落盘，避免逐字写文件。</summary>
+        private void ScheduleSave()
+        {
+            if (_isLoadingSettings)
+            {
+                return;
+            }
+
+            if (_saveTimer is null)
+            {
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
+                timer.Tick += (_, _) =>
+                {
+                    timer.Stop();
+                    PersistSettings(false);
+                };
+                _saveTimer = timer;
+            }
+
+            _saveTimer.Stop();
+            _saveTimer.Start();
         }
 
         private bool SetProperty<T>(ref T field, T value, [System.Runtime.CompilerServices.CallerMemberName] string? propertyName = null)

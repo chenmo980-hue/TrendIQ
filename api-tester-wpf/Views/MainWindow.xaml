@@ -7,10 +7,11 @@
     xmlns:vm="clr-namespace:ApiTester.Wpf.ViewModels"
     Title="API 测试工作台"
     Width="1180"
-    Height="780"
-    MinWidth="920"
-    MinHeight="620"
-    CaptionBackground="#0F172A"
+    Height="880"
+    MinWidth="960"
+    MinHeight="660"
+    Background="#0B1220"
+    CaptionBackground="#0B1220"
     CaptionHeight="52"
     FitSystemWindow="False"
     Foreground="#E5E7EB"
@@ -22,12 +23,174 @@
     SystemButtonOverColor="#1E293B"
     SystemButtonSize="52"
     WindowStartupLocation="CenterScreen">
+
+    <dmskin:DMSkinWindow.Resources>
+        <SolidColorBrush x:Key="PanelBrush" Color="#101B2D" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#1E2A3F" />
+        <SolidColorBrush x:Key="FieldBrush" Color="#0A1422" />
+        <SolidColorBrush x:Key="FieldBorderBrush" Color="#2A3A55" />
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#E8EEF7" />
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#8FA3BF" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#38BDF8" />
+
+        <Style x:Key="DarkScrollBarStyle" TargetType="ScrollBar">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Width" Value="10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Grid Background="Transparent">
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False" Opacity="0" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb>
+                                        <Thumb.Template>
+                                            <ControlTemplate TargetType="Thumb">
+                                                <Border Background="#33455F" CornerRadius="5" Margin="2,0,2,0" />
+                                            </ControlTemplate>
+                                        </Thumb.Template>
+                                    </Thumb>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="ScrollBar.PageDownCommand" Focusable="False" Opacity="0" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Orientation" Value="Horizontal">
+                                <Setter Property="Height" Value="10" />
+                                <Setter Property="Width" Value="Auto" />
+                                <Setter TargetName="PART_Track" Property="Orientation" Value="Horizontal" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBarStyle}" />
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Padding" Value="10,7" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1B2A42" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#1D4ED8" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="{StaticResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid TextElement.Foreground="{StaticResource TextPrimaryBrush}">
+                            <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ToggleBorder" Background="{StaticResource FieldBrush}"
+                                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="6">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#8FA3BF" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
+                                              Margin="12,0,34,0" VerticalAlignment="Center"
+                                              Content="{TemplateBinding SelectionBoxItem}"
+                                              ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                              ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}" />
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Bottom" Focusable="False"
+                                   PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}">
+                                <Border MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Margin="0,4,0,0" Padding="4" Background="#0F1B2D"
+                                        BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="8">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkButtonBase" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="Background" Value="#1B2A42" />
+            <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
+            <Setter Property="Padding" Value="14,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="BtnBorder" Property="Opacity" Value="0.85" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="BtnBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="SelectionBrush" Value="#2563EB" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+
+        <Style x:Key="DarkPasswordBoxStyle" TargetType="PasswordBox">
+            <Setter Property="Background" Value="{StaticResource FieldBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource FieldBorderBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+    </dmskin:DMSkinWindow.Resources>
+
     <dmskin:DMSkinWindow.DataContext>
         <vm:MainViewModel />
     </dmskin:DMSkinWindow.DataContext>
 
     <dmskin:DMSkinWindow.TitleContent>
-        <Grid Background="#111827">
+        <Grid Background="#0B1220">
             <StackPanel Margin="14,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
                 <Path Width="18" Height="18" Data="{StaticResource DMSkin}" Fill="#38BDF8" Stretch="Fill" />
                 <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" Foreground="#F8FAFC" Text="API 测试工作台" />
@@ -36,152 +199,179 @@
         </Grid>
     </dmskin:DMSkinWindow.TitleContent>
 
-    <Grid Margin="18">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0" Background="#111827" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="10" Padding="16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Vertical">
-                    <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#F8FAFC" Text="连接设置" />
-                    <TextBlock Margin="0,4,0,0" Foreground="#94A3B8" Text="配置服务地址与密钥，密钥仅保存在当前运行内存中。" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="9" Height="9" Fill="#22C55E" Margin="0,0,8,0" />
-                    <TextBlock Foreground="#86EFAC" Text="{Binding StatusText}" VerticalAlignment="Center" />
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Border Grid.Row="1" Margin="0,14,0,0" Background="#111827" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="10" Padding="16">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.35*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,18,14">
-                    <TextBlock Foreground="#94A3B8" Text="API 基本网址" />
-                    <TextBox Margin="0,6,0,0" Height="34" Padding="10,0,0,0" VerticalContentAlignment="Center"
-                             Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}"
-                             Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0" />
-                </StackPanel>
-                <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,18,14">
-                    <TextBlock Foreground="#94A3B8" Text="API 密钥" />
-                    <Grid Margin="0,6,0,0" Height="34">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="ApiKeyPasswordBox" Padding="10,0,0,0" VerticalContentAlignment="Center"
-                                     Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0"
-                                     PasswordChanged="ApiKeyPasswordBox_OnPasswordChanged" />
-                        <TextBox x:Name="ApiKeyTextBox" Padding="10,0,0,0" VerticalContentAlignment="Center"
-                                 Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0"
-                                 Visibility="Collapsed" TextChanged="ApiKeyTextBox_OnTextChanged" />
-                        <Button Grid.Column="1" Width="58" Margin="6,0,0,0" Content="显示" Foreground="#BAE6FD"
-                                Background="#1E293B" BorderBrush="#334155" Click="RevealKeyButton_OnClick" />
-                    </Grid>
-                </StackPanel>
-                <StackPanel Grid.Row="0" Grid.Column="2" VerticalAlignment="Bottom" Margin="0,0,0,14">
-                    <Button Height="34" MinWidth="108" Padding="16,0,16,0" Content="拉取模型" Foreground="#082F49"
-                            Background="#38BDF8" BorderBrush="#38BDF8" FontWeight="SemiBold"
-                            Command="{Binding FetchModelsCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,18,14">
-                    <TextBlock Foreground="#94A3B8" Text="模型（可选择或手动输入）" />
-                    <ComboBox Margin="0,6,0,0" Height="34" Padding="8,0,0,0"
-                               ItemsSource="{Binding Models}" SelectedItem="{Binding SelectedModel, UpdateSourceTrigger=PropertyChanged}"
-                               Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0" />
-                </StackPanel>
-                <Border Grid.Row="1" Grid.Column="2" Margin="0,0,0,14" Background="#0F172A" BorderBrush="#334155" BorderThickness="1" CornerRadius="6" Padding="12">
-                    <StackPanel>
-                        <TextBlock Foreground="#94A3B8" Text="已发现模型" HorizontalAlignment="Center" />
-                        <TextBlock Margin="0,4,0,0" Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold" Text="{Binding Models.Count, StringFormat={}{0}}" HorizontalAlignment="Center" />
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Background="#0F172A" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="8" Padding="12">
-                    <ScrollViewer Style="{StaticResource DMScrollViewer}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="150">
-                        <ItemsControl ItemsSource="{Binding Models}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel />
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Margin="0,0,8,8" Padding="9,6" Background="#1E293B" BorderBrush="#334155" BorderThickness="1" CornerRadius="5">
-                                        <TextBlock Foreground="#CBD5E1" Text="{Binding}" FontFamily="Consolas" FontSize="12" />
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </Border>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="2" Margin="0,14,0,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="1.25*" />
-            </Grid.ColumnDefinitions>
+    <!-- 整页可滚动：窗口变矮时底部按钮依然能滚出来，不再被裁掉 -->
+    <ScrollViewer Background="#0B1220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                  Padding="0,0,6,0">
+        <Grid Margin="18,18,14,18">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Border Grid.Row="0" Grid.Column="0" Margin="0,0,12,10" Background="#111827" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="10" Padding="14">
-                <StackPanel>
-                    <TextBlock Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" Text="消息内容" />
-                    <TextBox Margin="0,10,0,0" MinHeight="150" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                             Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}"
-                             Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0" Padding="10" />
-                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                        <TextBlock Foreground="#94A3B8" Text="最大输出 token" VerticalAlignment="Center" />
-                        <TextBox Width="88" Margin="10,0,0,0" Padding="7,0,0,0" VerticalContentAlignment="Center"
-                                 Text="{Binding MaxTokensText, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="#0F172A" BorderBrush="#334155" Foreground="#E2E8F0" />
-                        <Button Margin="14,0,0,0" MinWidth="108" Height="34" Content="发送消息" Foreground="#052E16"
-                                Background="#4ADE80" BorderBrush="#4ADE80" FontWeight="SemiBold"
-                                Command="{Binding SendMessageCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
-                        <Button Margin="10,0,0,0" Height="34" Padding="14,0,14,0" Content="清空结果" Foreground="#CBD5E1"
-                                Background="#1E293B" BorderBrush="#334155" Command="{Binding ClearOutputCommand}" />
+            <Border Grid.Row="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#F8FAFC" Text="连接设置" />
+                        <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextMutedBrush}"
+                                   Text="配置自动保存到可写目录（优先 %APPDATA%\ApiTester，不可写时落到程序目录 config），下次启动自动载入。" />
                     </StackPanel>
-                </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="9" Height="9" Fill="#22C55E" Margin="0,0,8,0" />
+                        <TextBlock Foreground="#86EFAC" Text="{Binding StatusText}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <Border Grid.Row="0" Grid.Column="1" Margin="12,0,0,10" Background="#111827" BorderBrush="#1E293B" BorderThickness="1" CornerRadius="10" Padding="14">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" Text="响应结果" />
-                        <TextBlock Margin="12,0,0,0" Foreground="#64748B" Text="JSON / 错误诊断" VerticalAlignment="Center" />
+            <Border Grid.Row="1" Margin="0,14,0,0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.35*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,18,14">
+                        <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="API 基本网址" />
+                        <TextBox Margin="0,6,0,0" Height="34" Padding="10,0,10,0" Style="{StaticResource DarkTextBoxStyle}"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}" />
                     </StackPanel>
-                    <TextBox Margin="0,10,0,0" MinHeight="150" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
-                             Text="{Binding OutputText, UpdateSourceTrigger=PropertyChanged}"
-                             Background="#0F172A" BorderBrush="#1E293B" Foreground="#D1FAE5" Padding="10"
-                             FontFamily="Consolas" FontSize="12" />
-                </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="1" Margin="0,0,18,14">
+                        <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="API 密钥" />
+                        <Grid Margin="0,6,0,0" Height="34">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="ApiKeyPasswordBox" Padding="10,0,10,0" VerticalContentAlignment="Center"
+                                         Style="{StaticResource DarkPasswordBoxStyle}"
+                                         PasswordChanged="ApiKeyPasswordBox_OnPasswordChanged" />
+                            <TextBox x:Name="ApiKeyTextBox" Padding="10,0,10,0" VerticalContentAlignment="Center"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     Visibility="Collapsed" TextChanged="ApiKeyTextBox_OnTextChanged" />
+                            <Button Grid.Column="1" Width="58" Margin="6,0,0,0" Content="显示" Style="{StaticResource DarkButtonBase}"
+                                    Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
+                                    Click="RevealKeyButton_OnClick" />
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="0" Grid.Column="2" VerticalAlignment="Bottom" Margin="0,0,0,14" Orientation="Horizontal">
+                        <Button Height="34" MinWidth="108" Content="拉取模型" Style="{StaticResource DarkButtonBase}"
+                                Foreground="#06283D" Background="#38BDF8" BorderBrush="#38BDF8" FontWeight="SemiBold"
+                                Command="{Binding FetchModelsCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+                        <Button Height="34" MinWidth="96" Margin="10,0,0,0" Content="保存配置" Style="{StaticResource DarkButtonBase}"
+                                Command="{Binding SaveSettingsCommand}" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,18,14">
+                        <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="模型（可选择或手动输入）" />
+                        <ComboBox x:Name="ModelComboBox" Margin="0,6,0,0" Style="{StaticResource DarkComboBoxStyle}"
+                                  ItemsSource="{Binding Models}"
+                                  SelectedItem="{Binding SelectedModel, UpdateSourceTrigger=PropertyChanged}" />
+                    </StackPanel>
+
+                    <Border Grid.Row="1" Grid.Column="2" Margin="0,0,0,14" Background="{StaticResource FieldBrush}"
+                            BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="12,8">
+                        <StackPanel>
+                            <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="已发现模型" HorizontalAlignment="Center" />
+                            <TextBlock Margin="0,2,0,0" Foreground="#F8FAFC" FontSize="18" FontWeight="SemiBold"
+                                       Text="{Binding Models.Count, StringFormat={}{0}}" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- 模型标签区：高度收短并自带滚动条 -->
+                    <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Background="{StaticResource FieldBrush}"
+                            BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="104">
+                            <ItemsControl ItemsSource="{Binding Models}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Margin="0,0,8,8" Padding="9,6" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="5">
+                                            <TextBlock Foreground="#CBD5E1" Text="{Binding}" FontFamily="Consolas" FontSize="12" />
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- 消息区与响应区：固定高度 360，内部用 Grid 的 * 行撑开，按钮行永远保留 -->
+            <Grid Grid.Row="2" Margin="0,14,0,0" Height="360">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="1.25*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Margin="0,0,12,0" Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" Text="消息内容" />
+                            <TextBlock Margin="12,0,0,0" Foreground="#64748B" Text="默认“你好”" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBox Grid.Row="1" Margin="0,10,0,0" AcceptsReturn="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding Message, UpdateSourceTrigger=PropertyChanged}" Padding="10" />
+                        <StackPanel Grid.Row="2" Margin="0,12,0,0" Orientation="Horizontal">
+                            <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="最大输出 token" VerticalAlignment="Center" />
+                            <TextBox Width="88" Height="30" Margin="10,0,0,0" Padding="8,0,8,0" VerticalContentAlignment="Center"
+                                     Style="{StaticResource DarkTextBoxStyle}"
+                                     Text="{Binding MaxTokensText, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button Margin="14,0,0,0" MinWidth="108" Height="34" Content="发送消息" Style="{StaticResource DarkButtonBase}"
+                                    Foreground="#052E16" Background="#4ADE80" BorderBrush="#4ADE80" FontWeight="SemiBold"
+                                    Command="{Binding SendMessageCommand}" IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBoolConverter}}" />
+                            <Button Margin="10,0,0,0" Height="34" Padding="14,0,14,0" Content="清空结果" Style="{StaticResource DarkButtonBase}"
+                                    Command="{Binding ClearOutputCommand}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="1" Margin="12,0,0,0" Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Grid.Row="0" Orientation="Horizontal">
+                            <TextBlock Foreground="#F8FAFC" FontSize="16" FontWeight="SemiBold" Text="响应结果" />
+                            <TextBlock Margin="12,0,0,0" Foreground="#64748B" Text="JSON / 错误诊断" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <TextBox Grid.Row="1" Margin="0,10,0,0" IsReadOnly="True" TextWrapping="Wrap"
+                                 VerticalScrollBarVisibility="Auto" Style="{StaticResource DarkTextBoxStyle}"
+                                 Text="{Binding OutputText, UpdateSourceTrigger=PropertyChanged}" Padding="10"
+                                 Foreground="#D1FAE5" FontFamily="Consolas" FontSize="12" />
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="3" Margin="0,12,0,0" Padding="10,0,0,0">
+                <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 配置自动保存并可手动“保存配置” · DMSkin 深色主题" />
             </Border>
         </Grid>
-
-        <Border Grid.Row="3" Margin="0,12,0,0" Padding="10,0,0,0">
-            <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 使用 DMSkin 自定义窗口与深色界面" />
-        </Border>
-    </Grid>
+    </ScrollViewer>
 </dmskin:DMSkinWindow>

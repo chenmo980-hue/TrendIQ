@@ -1,4 +1,5 @@
 using ApiTester.Wpf.ViewModels;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -11,13 +12,53 @@ namespace ApiTester.Wpf.Views
         public MainWindow()
         {
             InitializeComponent();
-            DataContextChanged += (_, _) =>
+            DataContextChanged += OnDataContextChanged;
+            Closing += OnWindowClosing;
+        }
+
+        private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
+        {
+            if (e.OldValue is MainViewModel previous)
             {
-                if (DataContext is MainViewModel viewModel)
-                {
-                    ApiKeyPasswordBox.Password = viewModel.ApiKey;
-                }
-            };
+                previous.PropertyChanged -= OnViewModelPropertyChanged;
+            }
+
+            if (e.NewValue is MainViewModel current)
+            {
+                current.PropertyChanged += OnViewModelPropertyChanged;
+                SyncApiKeyBoxes(current);
+            }
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (sender is MainViewModel viewModel && e.PropertyName == nameof(MainViewModel.ApiKey))
+            {
+                SyncApiKeyBoxes(viewModel);
+            }
+        }
+
+        private void SyncApiKeyBoxes(MainViewModel viewModel)
+        {
+            if (_revealingKey)
+            {
+                return;
+            }
+
+            if (ApiKeyPasswordBox.Password != viewModel.ApiKey)
+            {
+                ApiKeyPasswordBox.Password = viewModel.ApiKey;
+            }
+
+            if (ApiKeyTextBox.Text != viewModel.ApiKey)
+            {
+                ApiKeyTextBox.Text = viewModel.ApiKey;
+            }
+        }
+
+        private void OnWindowClosing(object? sender, CancelEventArgs e)
+        {
+            (DataContext as MainViewModel)?.PersistSettings(false);
         }
 
         private void ApiKeyPasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)
@@ -30,7 +71,7 @@ namespace ApiTester.Wpf.Views
 
         private void ApiKeyTextBox_OnTextChanged(object sender, TextChangedEventArgs e)
         {
-            if (DataContext is MainViewModel viewModel)
+            if (DataContext is MainViewModel viewModel && !_revealingKey)
             {
                 viewModel.ApiKey = ApiKeyTextBox.Text;
             }
