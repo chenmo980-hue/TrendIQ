@@ -52,6 +52,8 @@ namespace ApiTester.Wpf.ViewModels
         private string _message = "你好";
         private string _maxTokensText = "512";
         private string _savedModel = string.Empty;
+        private string _configName = string.Empty;
+        private string _selectedConfigName = SettingsStore.DefaultConfigName;
 
         public MainViewModel()
         {
@@ -59,6 +61,9 @@ namespace ApiTester.Wpf.ViewModels
             SendMessageCommand = new DelegateCommand(async _ => await SendMessageAsync());
             ClearOutputCommand = new DelegateCommand(_ => ClearOutput());
             SaveSettingsCommand = new DelegateCommand(_ => PersistSettings(true));
+            NewConfigCommand = new DelegateCommand(_ => CreateConfig());
+            LoadConfigCommand = new DelegateCommand(_ => LoadConfig());
+            RefreshConfigList();
             LoadSettings();
             // 启动即拉一次模型列表：用户一进界面下拉就有可用集合，
             // 不会因“没拉过模型就用了一个保存下来的坏模型”而一直提示错误。
@@ -154,10 +159,31 @@ namespace ApiTester.Wpf.ViewModels
             }
         }
 
+        /// <summary>新配置的输入名称；不会随配置内容自动保存。</summary>
+        public string ConfigName
+        {
+            get => _configName;
+            set => SetProperty(ref _configName, value ?? string.Empty);
+        }
+
+        /// <summary>配置下拉框当前选中的名称。</summary>
+        public string SelectedConfigName
+        {
+            get => _selectedConfigName;
+            set
+            {
+                SetProperty(ref _selectedConfigName, string.IsNullOrWhiteSpace(value) ? SettingsStore.DefaultConfigName : value);
+            }
+        }
+
+        public ObservableCollection<ConfigItem> SavedConfigs { get; } = new();
+
         public ICommand FetchModelsCommand { get; }
         public ICommand SendMessageCommand { get; }
         public ICommand ClearOutputCommand { get; }
         public ICommand SaveSettingsCommand { get; }
+        public ICommand NewConfigCommand { get; }
+        public ICommand LoadConfigCommand { get; }
 
         /// <summary>从 WrapPanel 标签点击时调用：先选中，立即探活，失败回滚并提示。</summary>
         public async void SelectModelFromTag(string model)
@@ -537,23 +563,142 @@ namespace ApiTester.Wpf.ViewModels
             StatusText = "已清空";
         }
 
-        /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>
-        public void PersistSettings(bool report)
+        private AppSettings CaptureSettings()
         {
-            _saveTimer?.Stop();
-            var saved = _settingsStore.Save(new AppSettings
+            return new AppSettings
             {
                 BaseUrl = BaseUrl,
                 ApiKey = ApiKey,
                 SelectedModel = string.IsNullOrWhiteSpace(SelectedModel) ? _savedModel : SelectedModel,
                 MaxTokens = MaxTokensText,
                 Message = Message
-            });
+            };
+        }
+
+        /// <summary>用当前界面内容新建一个不重名的配置。</summary>
+        public bool CreateConfig()
+        {
+            var name = ConfigName.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                StatusText = "请先输入新配置名称";
+                return false;
+            }
+
+            if (_settingsStore.ConfigExists(name))
+            {
+                StatusText = "配置名已存在，请更换名称";
+                return false;
+            }
+
+            if (!_settingsStore.CreateConfig(name, CaptureSettings()))
+            {
+                StatusText = "新建配置失败：当前目录不可写";
+                return false;
+            }
+
+            SelectedConfigName = name;
+            ConfigName = string.Empty;
+            RefreshConfigList();
+            StatusText = "已新建配置：" + name;
+            return true;
+        }
+
+        /// <summary>读取下拉框选中的配置并切换到界面。</summary>
+        public bool LoadConfig()
+        {
+            var name = SelectedConfigName.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                StatusText = "请先选择要读取的配置";
+                return false;
+            }
+
+            var settings = _settingsStore.LoadConfig(name);
+            if (settings is null)
+            {
+                StatusText = "读取配置失败：" + name;
+                return false;
+            }
+
+            ApplySettings(settings, "已读取配置：" + name, preserveDefaults: false);
+            SelectedConfigName = name;
+            ConfigName = string.Empty;
+            RefreshConfigList();
+            return true;
+        }
+
+        private void ApplySettings(AppSettings settings, string status, bool preserveDefaults = true)
+        {
+            _isLoadingSettings = true;
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(settings.BaseUrl) || !preserveDefaults)
+                {
+                    BaseUrl = settings.BaseUrl ?? string.Empty;
+                }
+
+                if (settings.ApiKey is not null || !preserveDefaults)
+                {
+                    ApiKey = settings.ApiKey ?? string.Empty;
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.SelectedModel) || !preserveDefaults)
+                {
+                    _savedModel = settings.SelectedModel ?? string.Empty;
+                    SelectedModel = settings.SelectedModel ?? string.Empty;
+                }
+
+                if (!string.IsNullOrWhiteSpace(settings.MaxTokens) || !preserveDefaults)
+                {
+                    MaxTokensText = settings.MaxTokens ?? "512";
+                }
+
+                if (settings.Message is not null || !preserveDefaults)
+                {
+                    Message = settings.Message ?? "你好";
+                }
+            }
+            finally
+            {
+                _isLoadingSettings = false;
+            }
+
+            StatusText = status;
+        }
+
+        private void RefreshConfigList()
+        {
+            var previous = SelectedConfigName;
+            SavedConfigs.Clear();
+            foreach (var item in _settingsStore.ListConfigs())
+            {
+                SavedConfigs.Add(item);
+            }
+
+            if (SavedConfigs.Count == 0)
+            {
+                SelectedConfigName = SettingsStore.DefaultConfigName;
+                return;
+            }
+
+            var active = _settingsStore.ActiveConfigName ?? previous;
+            SelectedConfigName = SavedConfigs.Any(item => item.Name.Equals(active, StringComparison.OrdinalIgnoreCase))
+                ? active!
+                : (SavedConfigs.Any(item => item.Name.Equals(previous, StringComparison.OrdinalIgnoreCase)) ? previous : SavedConfigs[0].Name);
+        }
+
+        /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>
+        public void PersistSettings(bool report)
+        {
+            _saveTimer?.Stop();
+            var saved = _settingsStore.Save(CaptureSettings());
 
             if (report)
             {
+                var configName = _settingsStore.ActiveConfigName ?? SettingsStore.DefaultConfigName;
                 StatusText = saved
-                    ? "配置已保存：" + _settingsStore.FilePath
+                    ? $"配置已保存：{configName}（{_settingsStore.ActiveFilePath ?? _settingsStore.FilePath ?? "内存"}）"
                     : "配置已保存到内存（当前目录不可写）";
             }
         }
@@ -562,51 +707,17 @@ namespace ApiTester.Wpf.ViewModels
         private void LoadSettings()
         {
             var settings = _settingsStore.Load();
+            RefreshConfigList();
             if (settings is null)
             {
                 StatusText = "未找到历史配置，当前为默认值";
                 return;
             }
 
-            _isLoadingSettings = true;
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
-                {
-                    BaseUrl = settings.BaseUrl!;
-                }
-
-                if (settings.ApiKey is not null)
-                {
-                    ApiKey = settings.ApiKey;
-                }
-
-                if (!string.IsNullOrWhiteSpace(settings.SelectedModel))
-                {
-                    // 此刻 Models 还是空的，ComboBox 会把 SelectedItem 置空并回写 "",
-                    // 所以真正的选中要等模型列表拉回来之后再补。
-                    _savedModel = settings.SelectedModel!;
-                    SelectedModel = settings.SelectedModel!;
-                }
-
-                if (!string.IsNullOrWhiteSpace(settings.MaxTokens))
-                {
-                    MaxTokensText = settings.MaxTokens!;
-                }
-
-                if (!string.IsNullOrWhiteSpace(settings.Message))
-                {
-                    Message = settings.Message!;
-                }
-            }
-            finally
-            {
-                _isLoadingSettings = false;
-            }
-
-            StatusText = string.IsNullOrWhiteSpace(_settingsStore.LoadedFromPath)
+            ApplySettings(settings, string.IsNullOrWhiteSpace(_settingsStore.LoadedFromPath)
                 ? "已载入上次配置"
-                : "已载入上次配置：" + _settingsStore.LoadedFromPath;
+                : "已载入上次配置：" + _settingsStore.LoadedFromPath);
+            ConfigName = string.Empty;
         }
 
         /// <summary>输入停止约 0.8 秒后自动落盘，避免逐字写文件。</summary>

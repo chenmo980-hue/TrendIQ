@@ -208,6 +208,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Border Grid.Row="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
@@ -219,7 +220,7 @@
                     <StackPanel Orientation="Vertical">
                         <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#F8FAFC" Text="连接设置" />
                         <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextMutedBrush}"
-                                   Text="配置自动保存到可写目录（优先 %APPDATA%\ApiTester，不可写时落到程序目录 config），下次启动自动载入。" />
+                                   Text="支持默认配置与多份具名配置；输入名称可新建，选择后可读取，修改会自动保存。" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="9" Height="9" Fill="#22C55E" Margin="0,0,8,0" />
@@ -228,7 +229,49 @@
                 </Grid>
             </Border>
 
-            <Border Grid.Row="1" Margin="0,14,0,0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+            <Border Grid.Row="1" Margin="0,14,0,0" Background="{StaticResource FieldBrush}" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,8" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}" Text="新配置名称" />
+                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,10,8" Height="30" Padding="9,0,9,0"
+                             VerticalContentAlignment="Center" Style="{StaticResource DarkTextBoxStyle}"
+                             ToolTip="输入新配置名称后点击“新建配置”，会保存当前连接与消息设置。"
+                             Text="{Binding ConfigName, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Grid.Row="0" Grid.Column="2" Margin="0,0,10,8" Height="30" MinWidth="88"
+                            Content="新建配置" Style="{StaticResource DarkButtonBase}"
+                            Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
+                            Command="{Binding NewConfigCommand}" />
+                    <Button Grid.Row="0" Grid.Column="3" Margin="0,0,0,8" Height="30" MinWidth="88"
+                            Content="读取配置" Style="{StaticResource DarkButtonBase}"
+                            Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
+                            Command="{Binding LoadConfigCommand}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center"
+                               Foreground="{StaticResource TextMutedBrush}" Text="已保存配置" />
+                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,10,0"
+                              Style="{StaticResource DarkComboBoxStyle}"
+                              ItemsSource="{Binding SavedConfigs}"
+                              DisplayMemberPath="Name"
+                              SelectedValuePath="Name"
+                              SelectedValue="{Binding SelectedConfigName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              ToolTip="选择配置后点击“读取配置”切换当前连接设置。" />
+                    <TextBlock Grid.Row="1" Grid.Column="3" Margin="10,0,0,0" VerticalAlignment="Center"
+                               Foreground="#64748B" Text="保存按钮会写入当前选中的配置" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="2" Margin="0,14,0,0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1.35*" />
@@ -340,7 +383,7 @@
             </Border>
 
             <!-- 消息区与响应区：固定高度 360，内部用 Grid 的 * 行撑开，按钮行永远保留 -->
-            <Grid Grid.Row="2" Margin="0,14,0,0" Height="360">
+            <Grid Grid.Row="3" Margin="0,14,0,0" Height="360">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="1.25*" />
@@ -396,8 +439,8 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Row="3" Margin="0,12,0,0" Padding="10,0,0,0">
-                <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 配置自动保存并可手动“保存配置” · DMSkin 深色主题" />
+            <Border Grid.Row="4" Margin="0,12,0,0" Padding="10,0,0,0">
+                <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 支持默认配置与多份具名配置 · DMSkin 深色主题" />
             </Border>
         </Grid>
     </ScrollViewer>

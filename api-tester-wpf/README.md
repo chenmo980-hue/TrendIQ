@@ -9,7 +9,10 @@
 - 选择或手动输入模型
 - 发送 `/chat/completions`
 - 查看格式化 JSON 响应与错误诊断
+- 管理默认配置与多份具名配置，可新建、读取和切换
 - DMSkin 自定义窗口、标题栏和深色界面
+
+具名配置保存在默认 `settings.json` 所在目录的 `configs` 子目录中；输入名称后点击“新建配置”，从下拉框选择后点击“读取配置”即可切换。
 
 ## 构建
 
@@ -23,4 +26,4 @@ dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release
 dotnet run --project api-tester-wpf/ApiTester.Wpf.csproj
 ```
 
-密钥只保存在当前进程内存中，不会写入配置文件。
+配置会写入可写目录；默认配置使用 `settings.json`，具名配置保存在 `configs` 子目录。
