@@ -6,10 +6,10 @@
     xmlns:attached="clr-namespace:DMSkin.Attached"
     xmlns:vm="clr-namespace:ApiTester.Wpf.ViewModels"
     Title="API 测试工作台"
-    Width="1180"
-    Height="880"
-    MinWidth="960"
-    MinHeight="660"
+    Width="1280"
+    Height="1080"
+    MinWidth="1080"
+    MinHeight="860"
     Background="#0B1220"
     CaptionBackground="#0B1220"
     CaptionHeight="52"
@@ -199,9 +199,8 @@
         </Grid>
     </dmskin:DMSkinWindow.TitleContent>
 
-    <!-- 整页可滚动：窗口变矮时底部按钮依然能滚出来，不再被裁掉 -->
-    <ScrollViewer Background="#0B1220" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                  Padding="0,0,6,0">
+    <!-- 窗口扩高后去掉整页滚动条，主网格直接填满窗口 -->
+    <Grid Background="#0B1220">
         <Grid Margin="18,18,14,18">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -382,8 +381,8 @@
                 </Grid>
             </Border>
 
-            <!-- 消息区与响应区：固定高度 360，内部用 Grid 的 * 行撑开，按钮行永远保留 -->
-            <Grid Grid.Row="3" Margin="0,14,0,0" Height="360">
+            <!-- 消息区与响应区：固定高度 540，内部用 Grid 的 * 行撑开，按钮行永远保留 -->
+            <Grid Grid.Row="3" Margin="0,14,0,0" Height="540">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="1.25*" />
@@ -443,5 +442,5 @@
                 <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 支持默认配置与多份具名配置 · DMSkin 深色主题" />
             </Border>
         </Grid>
-    </ScrollViewer>
+    </Grid>
 </dmskin:DMSkinWindow>
