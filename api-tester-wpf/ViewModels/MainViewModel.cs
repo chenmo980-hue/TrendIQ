@@ -64,6 +64,7 @@ namespace ApiTester.Wpf.ViewModels
             SaveSettingsCommand = new DelegateCommand(_ => PersistSettings(true));
             NewConfigCommand = new DelegateCommand(_ => CreateConfig());
             LoadConfigCommand = new DelegateCommand(_ => LoadConfig());
+            CopyModelCommand = new DelegateCommand(param => CopyModelName(param as string));
             RefreshConfigList();
             LoadSettings();
             // 启动即拉一次模型列表：用户一进界面下拉就有可用集合，
@@ -123,6 +124,21 @@ namespace ApiTester.Wpf.ViewModels
         }
 
         public ObservableCollection<ModelItem> Models { get; } = new();
+        public ObservableCollection<ModelItem> FilteredModels { get; } = new();
+
+        /// <summary>根据输入关键字模糊过滤模型列表；空关键字显示全部。</summary>
+        public void FilterModels(string? keyword)
+        {
+            FilteredModels.Clear();
+            var kw = keyword?.Trim() ?? string.Empty;
+            foreach (var m in Models)
+            {
+                if (string.IsNullOrEmpty(kw) || m.Name.IndexOf(kw, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    FilteredModels.Add(m);
+                }
+            }
+        }
 
         public string SelectedModel
         {
@@ -185,6 +201,7 @@ namespace ApiTester.Wpf.ViewModels
         public ICommand SaveSettingsCommand { get; }
         public ICommand NewConfigCommand { get; }
         public ICommand LoadConfigCommand { get; }
+        public ICommand CopyModelCommand { get; }
 
         /// <summary>从 WrapPanel 标签点击时调用：先选中，立即探活，失败回滚并提示。</summary>
         public async void SelectModelFromTag(string model)
@@ -193,6 +210,7 @@ namespace ApiTester.Wpf.ViewModels
             var previous = _selectedModel;
             SelectedModel = model;
             SyncModelItemsSelection();
+                FilterModels(null);
             StatusText = "正在验证 " + model + " ...";
             var ok = await ProbeModelAsync(model);
             if (ok)
@@ -205,6 +223,7 @@ namespace ApiTester.Wpf.ViewModels
                 // 回滚避免用户进死路。状态栏给出明确原因。
                 SelectedModel = previous;
                 SyncModelItemsSelection();
+                FilterModels(null);
                 StatusText = model + " 在该中继上不可用，已回退到 " + previous;
             }
         }
@@ -375,6 +394,7 @@ namespace ApiTester.Wpf.ViewModels
                 }
                 SelectedModel = Models.FirstOrDefault()?.Name ?? string.Empty;
                 SyncModelItemsSelection();
+                FilterModels(null);
                 if (!string.IsNullOrWhiteSpace(_savedModel) && Models.Any(m => m.Name == _savedModel))
                 {
                     // /models 目录里列出 DeepSeek-V4-Pro 不代表 /chat 也接它——目录与实际可用性经常不一致。
@@ -384,6 +404,7 @@ namespace ApiTester.Wpf.ViewModels
                     {
                         SelectedModel = _savedModel;
                         SyncModelItemsSelection();
+                FilterModels(null);
                     }
                     else
                     {
@@ -562,6 +583,27 @@ namespace ApiTester.Wpf.ViewModels
         {
             OutputText = string.Empty;
             StatusText = "已清空";
+        }
+
+        /// <summary>把模型名复制到剪贴板；param 为空时复制当前选中的模型。</summary>
+        public void CopyModelName(string? model)
+        {
+            var text = string.IsNullOrWhiteSpace(model) ? SelectedModel : model;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                StatusText = "没有可复制的模型名";
+                return;
+            }
+            try
+            {
+                System.Windows.Clipboard.SetText(text);
+                StatusText = "已复制：" + text;
+            }
+            catch (Exception ex)
+            {
+                // 剪贴板被占用时会抛异常，不能崩。
+                StatusText = "复制失败：" + ex.Message;
+            }
         }
 
         private AppSettings CaptureSettings()

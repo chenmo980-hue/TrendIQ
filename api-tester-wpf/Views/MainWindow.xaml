@@ -321,11 +321,24 @@
                         <TextBlock Foreground="{StaticResource TextMutedBrush}" Text="模型（可选择或手动输入）" />
                         <!-- ItemsSource 是 ModelItem 集合；用 DisplayMemberPath/SelectedValuePath 把显示与值都
                              映射到 Name，SelectedModel 仍维持 string 双向绑定，类型/视觉双对。 -->
-                        <ComboBox x:Name="ModelComboBox" Margin="0,6,0,0" Style="{StaticResource DarkComboBoxStyle}"
-                                  ItemsSource="{Binding Models}"
-                                  DisplayMemberPath="Name"
-                                  SelectedValuePath="Name"
-                                  SelectedValue="{Binding SelectedModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <Grid Margin="0,6,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ComboBox x:Name="ModelComboBox" Grid.Column="0" Style="{StaticResource DarkComboBoxStyle}"
+                                      IsEditable="True" IsTextSearchEnabled="False"
+                                      ItemsSource="{Binding FilteredModels}"
+                                      DisplayMemberPath="Name"
+                                      SelectedValuePath="Name"
+                                      SelectedValue="{Binding SelectedModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      TextBoxBase.TextChanged="ModelComboBox_OnTextChanged" />
+                            <Button Grid.Column="1" Margin="8,0,0,0" Height="34" MinWidth="56" Content="复制"
+                                    Style="{StaticResource DarkButtonBase}"
+                                    Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
+                                    ToolTip="复制当前选中的模型名到剪贴板"
+                                    Command="{Binding CopyModelCommand}" CommandParameter="{Binding SelectedModel}" />
+                        </Grid>
                     </StackPanel>
 
                     <Border Grid.Row="1" Grid.Column="2" Margin="0,0,0,14" Background="{StaticResource FieldBrush}"
@@ -352,6 +365,12 @@
                                         <Button Margin="0,0,8,8" Padding="9,6" Cursor="Hand"
                                                 Click="ModelTag_Click" Tag="{Binding Name}"
                                                 Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1">
+                                            <Button.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="复制模型名" Click="CopyModelTag_OnClick"
+                                                              Tag="{Binding Name}" />
+                                                </ContextMenu>
+                                            </Button.ContextMenu>
                                             <Button.Template>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border x:Name="Bd" Padding="{TemplateBinding Padding}" CornerRadius="5"

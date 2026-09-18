@@ -1,0 +1,154 @@
+TrendIQ API Tester 多配置功能验证记录
+
+变更分支/字段：
+- SettingsStore：新增 ConfigItem、ListConfigs/GetConfigs、CreateConfig、LoadConfig/TryLoadConfig、ConfigExists、ActiveConfigName/ActiveFilePath；默认 settings.json 与 configs/*.json 分离。
+- MainViewModel：新增 ConfigName、SelectedConfigName、SavedConfigs、NewConfigCommand、LoadConfigCommand；实现新建、读取、切换及自动保存联动。
+- MainWindow.xaml：新增“新建配置”“读取配置”、配置名称输入与已保存配置下拉框，并调整外层行布局。
+- README.md：补充具名配置存储与操作说明。
+
+绝对路径：
+- 修改版源码目录：E:/WorkSpaces/TrendIQ/_fix/multiconfig/modified/api-tester-wpf
+- 差异工件：E:/WorkSpaces/TrendIQ/_fix/multiconfig/modified.diff
+- 验证记录：E:/WorkSpaces/TrendIQ/_fix/multiconfig/VERIFICATION.txt
+- 回滚脚本：E:/WorkSpaces/TrendIQ/_fix/multiconfig/ROLLBACK.sh
+- 原件副本：E:/WorkSpaces/TrendIQ/_fix/multiconfig/orig/api-tester-wpf
+- 第三回滚副本：E:/WorkSpaces/TrendIQ/_fix/multiconfig/third/api-tester-wpf
+- 发布产物：E:/WorkSpaces/TrendIQ/api-tester-wpf/dist/ApiTester.exe
+
+BASELINE
+精确命令：在 E:/WorkSpaces/TrendIQ/_fix/multiconfig/baseline-repo 执行 `dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release --no-restore`
+字面输出：
+适用于 .NET MSBuild 版本 17.8.3+195e7f5a3
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(25,72): warning CS8612: “event PropertyChangedEventHandler ModelItem.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(24,21): warning CS8767: “bool DelegateCommand.CanExecute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“bool ICommand.CanExecute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(32,21): warning CS8767: “void DelegateCommand.Execute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“void ICommand.Execute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(10,35): warning CS8612: “event EventHandler DelegateCommand.CanExecuteChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event EventHandler? ICommand.CanExecuteChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8612: “event PropertyChangedEventHandler ViewModelBase.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(29,72): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(12,29): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“CanExecuteChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“executeAction”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“canExecuteFunc”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(26,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(639,31): warning CS8604: “void ViewModelBase.OnPropertyChanged(string propertyName = null)”中的形参“propertyName”可能传入 null 引用实参。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(25,72): warning CS8612: “event PropertyChangedEventHandler ModelItem.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(24,21): warning CS8767: “bool DelegateCommand.CanExecute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“bool ICommand.CanExecute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(32,21): warning CS8767: “void DelegateCommand.Execute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“void ICommand.Execute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(10,35): warning CS8612: “event EventHandler DelegateCommand.CanExecuteChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event EventHandler? ICommand.CanExecuteChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8612: “event PropertyChangedEventHandler ViewModelBase.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(29,72): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(12,29): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“CanExecuteChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“executeAction”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“canExecuteFunc”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(26,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(639,31): warning CS8604: “void ViewModelBase.OnPropertyChanged(string propertyName = null)”中的形参“propertyName”可能传入 null 引用实参。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+  ApiTester.Wpf -> E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\bin\Release\net8.0-windows\ApiTester.dll
+
+已成功生成。
+
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(25,72): warning CS8612: “event PropertyChangedEventHandler ModelItem.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(24,21): warning CS8767: “bool DelegateCommand.CanExecute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“bool ICommand.CanExecute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(32,21): warning CS8767: “void DelegateCommand.Execute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“void ICommand.Execute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(10,35): warning CS8612: “event EventHandler DelegateCommand.CanExecuteChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event EventHandler? ICommand.CanExecuteChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8612: “event PropertyChangedEventHandler ViewModelBase.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(29,72): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(12,29): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“CanExecuteChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“executeAction”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“canExecuteFunc”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(26,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(639,31): warning CS8604: “void ViewModelBase.OnPropertyChanged(string propertyName = null)”中的形参“propertyName”可能传入 null 引用实参。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf_svouxlin_wpftmp.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(25,72): warning CS8612: “event PropertyChangedEventHandler ModelItem.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(24,21): warning CS8767: “bool DelegateCommand.CanExecute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“bool ICommand.CanExecute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(32,21): warning CS8767: “void DelegateCommand.Execute(object parameter)”的参数“parameter”类型中引用类型的为 Null 性与隐式实现的成员“void ICommand.Execute(object? parameter)”不匹配(可能是由于为 Null 性特性)。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(10,35): warning CS8612: “event EventHandler DelegateCommand.CanExecuteChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event EventHandler? ICommand.CanExecuteChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8612: “event PropertyChangedEventHandler ViewModelBase.PropertyChanged”的类型中引用类型的为 Null 性与隐式实现的成员“event PropertyChangedEventHandler? INotifyPropertyChanged.PropertyChanged”不匹配。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(29,72): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\ViewModelBase.cs(28,50): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(12,29): warning CS8625: 无法将 null 字面量转换为非 null 的引用类型。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“CanExecuteChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“executeAction”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\Vendor\DMSkin\MVVM\DelegateCommand.cs(15,16): warning CS8618: 在退出构造函数时，不可为 null 的 字段“canExecuteFunc”必须包含非 null 值。请考虑将 字段 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(26,16): warning CS8618: 在退出构造函数时，不可为 null 的 事件“PropertyChanged”必须包含非 null 值。请考虑将 事件 声明为可以为 null。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ViewModels\MainViewModel.cs(639,31): warning CS8604: “void ViewModelBase.OnPropertyChanged(string propertyName = null)”中的形参“propertyName”可能传入 null 引用实参。 [E:\WorkSpaces\TrendIQ\_fix\multiconfig\baseline-repo\api-tester-wpf\ApiTester.Wpf.csproj]
+    26 个警告
+    0 个错误
+
+已用时间 00:00:13.09
+
+[exit code: 0]
+退出码：0
+
+MODIFIED_BUILD
+精确命令：在 E:/WorkSpaces/TrendIQ 执行 `dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release --no-restore`
+字面输出：
+适用于 .NET MSBuild 版本 17.8.3+195e7f5a3
+  ApiTester.Wpf -> E:\WorkSpaces\TrendIQ\api-tester-wpf\bin\Release\net8.0-windows\ApiTester.dll
+
+已成功生成。
+    0 个警告
+    0 个错误
+
+已用时间 00:00:02.97
+
+[exit code: 0]
+[elapsed: 00:00:04.3928453]
+退出码：0
+
+MODIFIED_PUBLISH
+精确命令：在 E:/WorkSpaces/TrendIQ 执行 `dotnet publish api-tester-wpf/ApiTester.Wpf.csproj -c Release --self-contained false --no-restore -o api-tester-wpf/dist`
+字面输出：
+适用于 .NET MSBuild 版本 17.8.3+195e7f5a3
+  ApiTester.Wpf -> E:\WorkSpaces\TrendIQ\api-tester-wpf\bin\Release\net8.0-windows\ApiTester.dll
+  ApiTester.Wpf -> E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\
+
+[exit code: 0]
+[elapsed: 00:00:02.2444016]
+退出码：0
+
+FUNCTION_PROBE
+精确命令：`dotnet C:\Program Files\dotnet\sdk\8.0.101\Roslyn\bincore\csc.dll -nologo -langversion:latest -nullable:enable -target:exe -out:E:\WorkSpaces\TrendIQ\_fix\multiconfig\probe\ConfigProbe.exe E:\WorkSpaces\TrendIQ\_fix\multiconfig\probe\Program.cs E:\WorkSpaces\TrendIQ\api-tester-wpf\Services\SettingsStore.cs <net8.0 ref DLLs>`，随后执行 `dotnet E:\WorkSpaces\TrendIQ\_fix\multiconfig\probe\ConfigProbe.exe`；探针隔离 APPDATA/LOCALAPPDATA，并清理残留 config。
+字面输出：
+FilePath=E:\WorkSpaces\TrendIQ\_fix\multiconfig\probe\config\settings.json
+Root=C:\Users\Admin\AppData\Local\Temp\dsh-7dmgAc\trendiq-multiconfig-probe-ffc5a6db05a5425fb37c1cfd659f4404
+配置存储探针通过
+根目录=C:\Users\Admin\AppData\Local\Temp\dsh-7dmgAc\trendiq-multiconfig-probe-ffc5a6db05a5425fb37c1cfd659f4404
+配置=默认配置,测试配置
+
+[exit code: 0]
+[elapsed: 00:00:03.2191042]
+退出码：0
+
+ROLLBACK
+精确命令：将 ROLLBACK.sh 内容复制到临时 .ps1 入口后执行 `pwsh -NoProfile -File E:/WorkSpaces/TrendIQ/_fix/multiconfig/ROLLBACK.test.ps1 -Target E:/WorkSpaces/TrendIQ/_fix/multiconfig/third`
+字面输出：
+回滚完成：E:\WorkSpaces\TrendIQ\_fix\multiconfig\third/api-tester-wpf
+
+[exit code: 0]
+[elapsed: 00:00:01.0106667]
+退出码：0
+
+ROLLBACK_HASH_CHECK
+精确命令：对 orig/api-tester-wpf 与 third/api-tester-wpf 的五个文件逐文件计算 SHA256 并比较。
+字面输出：
+Services/SettingsStore.cs	BF178C69BA24919A04AE1BA13B4584CC6BD50D3774596E25F642E07C63F08104	BF178C69BA24919A04AE1BA13B4584CC6BD50D3774596E25F642E07C63F08104
+ViewModels/MainViewModel.cs	870E342FEA565A660C22B384ACB9B2BF51A70803CBEDF59FA3BA7BF179C15FA7	870E342FEA565A660C22B384ACB9B2BF51A70803CBEDF59FA3BA7BF179C15FA7
+Views/MainWindow.xaml	A73331E6E13F3801429E167073FB5B8E515E7992AAF690BC8D6F67B87FA53EE2	A73331E6E13F3801429E167073FB5B8E515E7992AAF690BC8D6F67B87FA53EE2
+Views/MainWindow.xaml.cs	79F1CC6BF7A57299B9AEE166F9A4372F671B629E120542C2430CA87573443DFF	79F1CC6BF7A57299B9AEE166F9A4372F671B629E120542C2430CA87573443DFF
+README.md	9A7BCCBAC73863BCFB6AD45B349081BF5C0BB8F7A91C9858D05B28FC20141E62	9A7BCCBAC73863BCFB6AD45B349081BF5C0BB8F7A91C9858D05B28FC20141E62
+回滚哈希核验通过	True
+退出码：0
+
+DIFF_CHECK
+精确命令：`git -C E:/WorkSpaces/TrendIQ diff --check`
+字面输出：
+warning: in the working copy of 'api-tester-wpf/README.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'api-tester-wpf/Services/SettingsStore.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'api-tester-wpf/ViewModels/MainViewModel.cs', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'api-tester-wpf/Views/MainWindow.xaml', LF will be replaced by CRLF the next time Git touches it
+[exit code: 0]
+退出码：0

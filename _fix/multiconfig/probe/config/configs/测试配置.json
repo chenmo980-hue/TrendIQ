@@ -1,0 +1,7 @@
+{
+  "BaseUrl": "https://updated.test/v1",
+  "ApiKey": "probe-key",
+  "SelectedModel": "probe-model",
+  "MaxTokens": "256",
+  "Message": "\u4F60\u597D\uD83D\uDE00"
+}

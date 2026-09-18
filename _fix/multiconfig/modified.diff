@@ -1,0 +1,813 @@
+diff --git a/api-tester-wpf/README.md b/api-tester-wpf/README.md
+index 286aa5d..efcfc65 100644
+--- a/api-tester-wpf/README.md
++++ b/api-tester-wpf/README.md
+@@ -9,8 +9,11 @@
+ - 选择或手动输入模型
+ - 发送 `/chat/completions`
+ - 查看格式化 JSON 响应与错误诊断
++- 管理默认配置与多份具名配置，可新建、读取和切换
+ - DMSkin 自定义窗口、标题栏和深色界面
+ 
++具名配置保存在默认 `settings.json` 所在目录的 `configs` 子目录中；输入名称后点击“新建配置”，从下拉框选择后点击“读取配置”即可切换。
++
+ ## 构建
+ 
+ ```powershell
+@@ -23,4 +26,4 @@ dotnet build api-tester-wpf/ApiTester.Wpf.csproj -c Release
+ dotnet run --project api-tester-wpf/ApiTester.Wpf.csproj
+ ```
+ 
+-密钥只保存在当前进程内存中，不会写入配置文件。
++配置会写入可写目录；默认配置使用 `settings.json`，具名配置保存在 `configs` 子目录。
+diff --git a/api-tester-wpf/Services/SettingsStore.cs b/api-tester-wpf/Services/SettingsStore.cs
+index 38580eb..8cc5f85 100644
+--- a/api-tester-wpf/Services/SettingsStore.cs
++++ b/api-tester-wpf/Services/SettingsStore.cs
+@@ -1,5 +1,7 @@
+ using System;
++using System.Collections.Generic;
+ using System.IO;
++using System.Linq;
+ using System.Text.Json;
+ 
+ namespace ApiTester.Wpf.Services
+@@ -14,21 +16,55 @@ namespace ApiTester.Wpf.Services
+         public string? Message { get; set; }
+     }
+ 
++    /// <summary>配置列表中的可见项。</summary>
++    public sealed class ConfigItem
++    {
++        public ConfigItem(string name, string filePath, bool isDefault, DateTime? lastModifiedUtc)
++        {
++            Name = name;
++            FilePath = filePath;
++            IsDefault = isDefault;
++            LastModifiedUtc = lastModifiedUtc;
++        }
++
++        public string Name { get; }
++        public string FilePath { get; }
++        public string Path => FilePath;
++        public bool IsDefault { get; }
++        public DateTime? LastModifiedUtc { get; }
++
++        public override string ToString() => Name;
++    }
++
+     /// <summary>
+-    /// 把配置读写到本地 JSON 文件。
+-    /// 依次尝试 %APPDATA%\ApiTester、%LOCALAPPDATA%\ApiTester、程序目录，
+-    /// 任何一个可用就固定用它；全部不可用时退化为"仅内存"模式，不抛异常。
++    /// 管理默认配置和多个具名配置。默认配置仍写入 settings.json，
++    /// 具名配置保存在同一可写根目录下的 configs 子目录中。
+     /// </summary>
+     public sealed class SettingsStore
+     {
++        public const string DefaultConfigName = "默认配置";
++
++        private const int MaxConfigNameLength = 64;
+         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
++        private static readonly HashSet<char> InvalidNameChars = new(
++            Path.GetInvalidFileNameChars()
++                .Concat(new[] { '/', '\\', ':', '*', '?', '"', '<', '>', '|' })
++                .Concat(Enumerable.Range(0, 32).Select(code => (char)code)));
+ 
+-        /// <summary>实际使用的配置文件路径；为 null 表示当前只能内存保存。</summary>
++        /// <summary>实际使用的默认配置文件路径；为 null 表示当前只能内存保存。</summary>
+         public string? FilePath { get; private set; }
+ 
++        /// <summary>当前正在编辑的配置名称。</summary>
++        public string? ActiveConfigName { get; private set; }
++
++        /// <summary>当前正在编辑的配置文件路径。</summary>
++        public string? ActiveFilePath => _activeFilePath ?? FilePath;
++
+         /// <summary>最近一次成功读到配置的来源路径；为 null 表示本次没读到任何历史配置。</summary>
+         public string? LoadedFromPath { get; private set; }
+ 
++        private string? _activeFilePath;
++
+         private static readonly string[] CandidateDirectories =
+         {
+             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ApiTester"),
+@@ -39,6 +75,8 @@ namespace ApiTester.Wpf.Services
+         public SettingsStore()
+         {
+             FilePath = ResolveWritablePath();
++            _activeFilePath = FilePath;
++            ActiveConfigName = DefaultConfigName;
+         }
+ 
+         private static string? ResolveWritablePath()
+@@ -67,11 +105,9 @@ namespace ApiTester.Wpf.Services
+             return null;
+         }
+ 
++        /// <summary>读取默认配置；保留原先的多路径打分逻辑，避免环境切换后读到空配置。</summary>
+         public AppSettings? Load()
+         {
+-            // 先读本次会话认定的可写路径，再把其余候选目录整个扫一遍。
+-            // 运行环境一变（受限目录突然不可写），写路径就会漂移到程序目录，
+-            // 而旧配置还留在 %APPDATA% —— 只认一个路径时，表现就是"能保存、读不回来"。
+             var paths = new List<string>();
+             if (!string.IsNullOrWhiteSpace(FilePath))
+             {
+@@ -92,9 +128,6 @@ namespace ApiTester.Wpf.Services
+                 }
+             }
+ 
+-            // 光靠"文件存在"决定读哪份是不够的：程序目录里那份可能是环境受限时落下的旧配置，
+-            // 里面密钥为空、网址是上一个服务。它存在，就会把用户真正填好的那份永远挡在后面。
+-            // 所以这里把所有候选都解析出来，按内容完整度打分，取最好的那份。
+             AppSettings? best = null;
+             string? bestPath = null;
+             var bestScore = -1;
+@@ -117,72 +150,316 @@ namespace ApiTester.Wpf.Services
+             }
+ 
+             LoadedFromPath = bestPath;
++            if (bestPath is null)
++            {
++                _activeFilePath = FilePath;
++                ActiveConfigName = DefaultConfigName;
++            }
++            else if (IsDefaultPath(bestPath))
++            {
++                _activeFilePath = bestPath;
++                ActiveConfigName = DefaultConfigName;
++            }
++            else
++            {
++                // 旧版会把多个 settings.json 当作同一份默认配置；优先写回本次选定的可写路径，
++                // 避免后续保存只落在某个旧环境目录，导致下次启动又读到过期内容。
++                if (!string.IsNullOrWhiteSpace(FilePath))
++                {
++                    TryWrite(FilePath, best!);
++                    _activeFilePath = FilePath;
++                }
++                else
++                {
++                    _activeFilePath = bestPath;
++                }
++
++                ActiveConfigName = DefaultConfigName;
++            }
++
+             return best;
+         }
+ 
+-        /// <summary>内容越完整分数越高；密钥权重最大，其次是网址与模型。</summary>
+-        private static int ScoreOf(AppSettings settings)
++        /// <summary>列出默认配置和所有具名配置。</summary>
++        public IReadOnlyList<ConfigItem> ListConfigs()
+         {
+-            var score = 0;
+-            if (!string.IsNullOrWhiteSpace(settings.ApiKey)) { score += 4; }
+-            if (!string.IsNullOrWhiteSpace(settings.BaseUrl)) { score += 2; }
+-            if (!string.IsNullOrWhiteSpace(settings.SelectedModel)) { score += 1; }
+-            return score;
+-        }
++            var result = new List<ConfigItem>();
++            if (!string.IsNullOrWhiteSpace(FilePath))
++            {
++                result.Add(CreateItem(DefaultConfigName, FilePath!, true));
++            }
+ 
+-        private static AppSettings? TryLoad(string path)
+-        {
+-            try
++            // 扫描所有候选根目录，环境切换后仍能找到以前保存的具名配置。
++            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
++            foreach (var directory in CandidateDirectories)
+             {
+-                if (!File.Exists(path))
++                if (string.IsNullOrWhiteSpace(directory))
+                 {
+-                    return null;
++                    continue;
+                 }
+ 
+-                var json = File.ReadAllText(path);
+-                return string.IsNullOrWhiteSpace(json)
+-                    ? null
+-                    : JsonSerializer.Deserialize<AppSettings>(json);
++                var configDirectory = Path.Combine(directory, "configs");
++                if (!Directory.Exists(configDirectory))
++                {
++                    continue;
++                }
++
++                try
++                {
++                    foreach (var file in Directory.EnumerateFiles(configDirectory, "*.json"))
++                    {
++                        var name = Path.GetFileNameWithoutExtension(file);
++                        if (string.IsNullOrWhiteSpace(name) || !seen.Add(name))
++                        {
++                            continue;
++                        }
++
++                        result.Add(CreateItem(name, file, false));
++                    }
++                }
++                catch
++                {
++                    // 某个目录暂时不可读时，仍返回其他目录中的配置。
++                }
+             }
+-            catch
++
++            return result;
++        }
++
++        /// <summary>兼容调用方使用“配置集合”这一表述。</summary>
++        public IReadOnlyList<ConfigItem> GetConfigs() => ListConfigs();
++
++        /// <summary>从当前界面内容创建一个全新的具名配置；同名配置不会被覆盖。</summary>
++        public bool CreateConfig(string name, AppSettings settings)
++        {
++            var normalizedName = NormalizeConfigName(name);
++            if (normalizedName is null || settings is null)
++            {
++                return false;
++            }
++
++            if (normalizedName.Equals(DefaultConfigName, StringComparison.OrdinalIgnoreCase))
++            {
++                return false;
++            }
++
++            var root = GetWritableRoot();
++            if (root is null)
+             {
++                return false;
++            }
++
++            var path = Path.Combine(root, "configs", GetSafeFileName(normalizedName) + ".json");
++            if (File.Exists(path))
++            {
++                return false;
++            }
++
++            if (!TryWrite(path, settings))
++            {
++                return false;
++            }
++
++            _activeFilePath = path;
++            ActiveConfigName = normalizedName;
++            LoadedFromPath = path;
++            return true;
++        }
++
++        /// <summary>读取指定配置并把它设为当前配置。</summary>
++        public AppSettings? LoadConfig(string name)
++        {
++            var path = FindConfigPath(name);
++            if (path is null)
++            {
++                LoadedFromPath = null;
+                 return null;
+             }
++
++            var settings = TryLoad(path);
++            if (settings is null)
++            {
++                LoadedFromPath = null;
++                return null;
++            }
++
++            _activeFilePath = path;
++            ActiveConfigName = IsDefaultPath(path) ? DefaultConfigName : Path.GetFileNameWithoutExtension(path);
++            LoadedFromPath = path;
++            return settings;
++        }
++
++        /// <summary>兼容调用方显式使用“尝试读取”的命名。</summary>
++        public bool TryLoadConfig(string name, out AppSettings? settings)
++        {
++            settings = LoadConfig(name);
++            return settings is not null;
+         }
+ 
+-        /// <summary>写入配置；成功返回 true。任何 IO 失败都只返回 false，不向上抛。</summary>
++        /// <summary>写入当前配置；默认配置继续兼容旧版镜像，具名配置只写自己的文件。</summary>
+         public bool Save(AppSettings settings)
+         {
+-            var path = FilePath;
+-            if (string.IsNullOrWhiteSpace(path))
++            var path = ActiveFilePath;
++            if (string.IsNullOrWhiteSpace(path) || settings is null)
+             {
+                 return false;
+             }
+ 
+             var saved = TryWrite(path, settings);
++            LoadedFromPath = path;
+ 
+-            // 其余候选位置只要已经有文件，就一并刷新成同一份内容，
+-            // 免得下次启动时两处内容不一致、又按打分选中过期的那一份。
+-            foreach (var directory in CandidateDirectories)
++            // 旧版只有 settings.json；默认配置写入时刷新已存在的旧镜像，
++            // 但不会把具名配置意外覆盖到默认文件。
++            if (saved && IsDefaultPath(path))
+             {
+-                if (string.IsNullOrWhiteSpace(directory))
++                foreach (var directory in CandidateDirectories)
+                 {
+-                    continue;
++                    if (string.IsNullOrWhiteSpace(directory))
++                    {
++                        continue;
++                    }
++
++                    var mirror = Path.Combine(directory, "settings.json");
++                    if (!string.Equals(mirror, path, StringComparison.OrdinalIgnoreCase) && File.Exists(mirror))
++                    {
++                        TryWrite(mirror, settings);
++                    }
+                 }
++            }
++
++            return saved;
++        }
++
++        /// <summary>判断配置名是否已被占用。</summary>
++        public bool ConfigExists(string name)
++        {
++            return ListConfigs().Any(item => item.Name.Equals(NormalizeConfigName(name) ?? string.Empty, StringComparison.OrdinalIgnoreCase));
++        }
+ 
+-                var mirror = Path.Combine(directory, "settings.json");
+-                if (string.Equals(mirror, path, StringComparison.OrdinalIgnoreCase))
++        private static ConfigItem CreateItem(string name, string path, bool isDefault)
++        {
++            DateTime? modified = null;
++            try
++            {
++                if (File.Exists(path))
+                 {
+-                    continue;
++                    modified = File.GetLastWriteTimeUtc(path);
+                 }
++            }
++            catch
++            {
++                // 文件可能在枚举后被删除；列表仍可显示名称。
++            }
++
++            return new ConfigItem(name, path, isDefault, modified);
++        }
+ 
+-                if (File.Exists(mirror))
++        private string? GetWritableRoot()
++        {
++            if (!string.IsNullOrWhiteSpace(FilePath))
++            {
++                var root = Path.GetDirectoryName(FilePath);
++                if (!string.IsNullOrWhiteSpace(root))
+                 {
+-                    TryWrite(mirror, settings);
++                    return root;
+                 }
+             }
+ 
+-            return saved;
++            foreach (var directory in CandidateDirectories)
++            {
++                try
++                {
++                    if (Directory.Exists(directory) || Directory.CreateDirectory(directory) is not null)
++                    {
++                        return directory;
++                    }
++                }
++                catch
++                {
++                    // 继续尝试下一个候选目录。
++                }
++            }
++
++            return null;
++        }
++
++        private string? FindConfigPath(string name)
++        {
++            var normalizedName = NormalizeConfigName(name);
++            if (normalizedName is null)
++            {
++                return null;
++            }
++
++            if (normalizedName.Equals(DefaultConfigName, StringComparison.OrdinalIgnoreCase))
++            {
++                return FilePath;
++            }
++
++            return ListConfigs()
++                .FirstOrDefault(item => !item.IsDefault && item.Name.Equals(normalizedName, StringComparison.OrdinalIgnoreCase))
++                ?.FilePath;
++        }
++
++        private bool IsDefaultPath(string path)
++        {
++            return !string.IsNullOrWhiteSpace(FilePath) &&
++                   string.Equals(Path.GetFullPath(path), Path.GetFullPath(FilePath), StringComparison.OrdinalIgnoreCase);
++        }
++
++        private static string? NormalizeConfigName(string? name)
++        {
++            if (string.IsNullOrWhiteSpace(name))
++            {
++                return null;
++            }
++
++            var normalized = name.Trim();
++            if (normalized.Length > MaxConfigNameLength ||
++                normalized.Any(character => char.IsControl(character) || InvalidNameChars.Contains(character)) ||
++                normalized.Equals(".", StringComparison.Ordinal) ||
++                normalized.Equals("..", StringComparison.Ordinal))
++            {
++                return null;
++            }
++
++            return normalized;
++        }
++
++        private static string GetSafeFileName(string name)
++        {
++            var safe = new string(name.Select(character => InvalidNameChars.Contains(character) ? '_' : character).ToArray()).Trim();
++            return string.IsNullOrWhiteSpace(safe) ? "config" : safe;
++        }
++
++        /// <summary>内容越完整分数越高；密钥权重最大，其次是网址与模型。</summary>
++        private static int ScoreOf(AppSettings settings)
++        {
++            var score = 0;
++            if (!string.IsNullOrWhiteSpace(settings.ApiKey)) { score += 4; }
++            if (!string.IsNullOrWhiteSpace(settings.BaseUrl)) { score += 2; }
++            if (!string.IsNullOrWhiteSpace(settings.SelectedModel)) { score += 1; }
++            return score;
++        }
++
++        private static AppSettings? TryLoad(string path)
++        {
++            try
++            {
++                if (!File.Exists(path))
++                {
++                    return null;
++                }
++
++                var json = File.ReadAllText(path);
++                return string.IsNullOrWhiteSpace(json)
++                    ? null
++                    : JsonSerializer.Deserialize<AppSettings>(json);
++            }
++            catch
++            {
++                return null;
++            }
+         }
+ 
+         private static bool TryWrite(string path, AppSettings settings)
+diff --git a/api-tester-wpf/ViewModels/MainViewModel.cs b/api-tester-wpf/ViewModels/MainViewModel.cs
+index e1336ab..daaca43 100644
+--- a/api-tester-wpf/ViewModels/MainViewModel.cs
++++ b/api-tester-wpf/ViewModels/MainViewModel.cs
+@@ -52,6 +52,8 @@ namespace ApiTester.Wpf.ViewModels
+         private string _message = "你好";
+         private string _maxTokensText = "512";
+         private string _savedModel = string.Empty;
++        private string _configName = string.Empty;
++        private string _selectedConfigName = SettingsStore.DefaultConfigName;
+ 
+         public MainViewModel()
+         {
+@@ -59,6 +61,9 @@ namespace ApiTester.Wpf.ViewModels
+             SendMessageCommand = new DelegateCommand(async _ => await SendMessageAsync());
+             ClearOutputCommand = new DelegateCommand(_ => ClearOutput());
+             SaveSettingsCommand = new DelegateCommand(_ => PersistSettings(true));
++            NewConfigCommand = new DelegateCommand(_ => CreateConfig());
++            LoadConfigCommand = new DelegateCommand(_ => LoadConfig());
++            RefreshConfigList();
+             LoadSettings();
+             // 启动即拉一次模型列表：用户一进界面下拉就有可用集合，
+             // 不会因“没拉过模型就用了一个保存下来的坏模型”而一直提示错误。
+@@ -154,10 +159,31 @@ namespace ApiTester.Wpf.ViewModels
+             }
+         }
+ 
++        /// <summary>新配置的输入名称；不会随配置内容自动保存。</summary>
++        public string ConfigName
++        {
++            get => _configName;
++            set => SetProperty(ref _configName, value ?? string.Empty);
++        }
++
++        /// <summary>配置下拉框当前选中的名称。</summary>
++        public string SelectedConfigName
++        {
++            get => _selectedConfigName;
++            set
++            {
++                SetProperty(ref _selectedConfigName, string.IsNullOrWhiteSpace(value) ? SettingsStore.DefaultConfigName : value);
++            }
++        }
++
++        public ObservableCollection<ConfigItem> SavedConfigs { get; } = new();
++
+         public ICommand FetchModelsCommand { get; }
+         public ICommand SendMessageCommand { get; }
+         public ICommand ClearOutputCommand { get; }
+         public ICommand SaveSettingsCommand { get; }
++        public ICommand NewConfigCommand { get; }
++        public ICommand LoadConfigCommand { get; }
+ 
+         /// <summary>从 WrapPanel 标签点击时调用：先选中，立即探活，失败回滚并提示。</summary>
+         public async void SelectModelFromTag(string model)
+@@ -537,66 +563,100 @@ namespace ApiTester.Wpf.ViewModels
+             StatusText = "已清空";
+         }
+ 
+-        /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>
+-        public void PersistSettings(bool report)
++        private AppSettings CaptureSettings()
+         {
+-            _saveTimer?.Stop();
+-            var saved = _settingsStore.Save(new AppSettings
++            return new AppSettings
+             {
+                 BaseUrl = BaseUrl,
+                 ApiKey = ApiKey,
+                 SelectedModel = string.IsNullOrWhiteSpace(SelectedModel) ? _savedModel : SelectedModel,
+                 MaxTokens = MaxTokensText,
+                 Message = Message
+-            });
++            };
++        }
+ 
+-            if (report)
++        /// <summary>用当前界面内容新建一个不重名的配置。</summary>
++        public bool CreateConfig()
++        {
++            var name = ConfigName.Trim();
++            if (string.IsNullOrWhiteSpace(name))
+             {
+-                StatusText = saved
+-                    ? "配置已保存：" + _settingsStore.FilePath
+-                    : "配置已保存到内存（当前目录不可写）";
++                StatusText = "请先输入新配置名称";
++                return false;
+             }
++
++            if (_settingsStore.ConfigExists(name))
++            {
++                StatusText = "配置名已存在，请更换名称";
++                return false;
++            }
++
++            if (!_settingsStore.CreateConfig(name, CaptureSettings()))
++            {
++                StatusText = "新建配置失败：当前目录不可写";
++                return false;
++            }
++
++            SelectedConfigName = name;
++            ConfigName = string.Empty;
++            RefreshConfigList();
++            StatusText = "已新建配置：" + name;
++            return true;
+         }
+ 
+-        /// <summary>启动时把上次保存的配置读回界面。</summary>
+-        private void LoadSettings()
++        /// <summary>读取下拉框选中的配置并切换到界面。</summary>
++        public bool LoadConfig()
+         {
+-            var settings = _settingsStore.Load();
++            var name = SelectedConfigName.Trim();
++            if (string.IsNullOrWhiteSpace(name))
++            {
++                StatusText = "请先选择要读取的配置";
++                return false;
++            }
++
++            var settings = _settingsStore.LoadConfig(name);
+             if (settings is null)
+             {
+-                StatusText = "未找到历史配置，当前为默认值";
+-                return;
++                StatusText = "读取配置失败：" + name;
++                return false;
+             }
+ 
++            ApplySettings(settings, "已读取配置：" + name, preserveDefaults: false);
++            SelectedConfigName = name;
++            ConfigName = string.Empty;
++            RefreshConfigList();
++            return true;
++        }
++
++        private void ApplySettings(AppSettings settings, string status, bool preserveDefaults = true)
++        {
+             _isLoadingSettings = true;
+             try
+             {
+-                if (!string.IsNullOrWhiteSpace(settings.BaseUrl))
++                if (!string.IsNullOrWhiteSpace(settings.BaseUrl) || !preserveDefaults)
+                 {
+-                    BaseUrl = settings.BaseUrl!;
++                    BaseUrl = settings.BaseUrl ?? string.Empty;
+                 }
+ 
+-                if (settings.ApiKey is not null)
++                if (settings.ApiKey is not null || !preserveDefaults)
+                 {
+-                    ApiKey = settings.ApiKey;
++                    ApiKey = settings.ApiKey ?? string.Empty;
+                 }
+ 
+-                if (!string.IsNullOrWhiteSpace(settings.SelectedModel))
++                if (!string.IsNullOrWhiteSpace(settings.SelectedModel) || !preserveDefaults)
+                 {
+-                    // 此刻 Models 还是空的，ComboBox 会把 SelectedItem 置空并回写 "",
+-                    // 所以真正的选中要等模型列表拉回来之后再补。
+-                    _savedModel = settings.SelectedModel!;
+-                    SelectedModel = settings.SelectedModel!;
++                    _savedModel = settings.SelectedModel ?? string.Empty;
++                    SelectedModel = settings.SelectedModel ?? string.Empty;
+                 }
+ 
+-                if (!string.IsNullOrWhiteSpace(settings.MaxTokens))
++                if (!string.IsNullOrWhiteSpace(settings.MaxTokens) || !preserveDefaults)
+                 {
+-                    MaxTokensText = settings.MaxTokens!;
++                    MaxTokensText = settings.MaxTokens ?? "512";
+                 }
+ 
+-                if (!string.IsNullOrWhiteSpace(settings.Message))
++                if (settings.Message is not null || !preserveDefaults)
+                 {
+-                    Message = settings.Message!;
++                    Message = settings.Message ?? "你好";
+                 }
+             }
+             finally
+@@ -604,9 +664,60 @@ namespace ApiTester.Wpf.ViewModels
+                 _isLoadingSettings = false;
+             }
+ 
+-            StatusText = string.IsNullOrWhiteSpace(_settingsStore.LoadedFromPath)
++            StatusText = status;
++        }
++
++        private void RefreshConfigList()
++        {
++            var previous = SelectedConfigName;
++            SavedConfigs.Clear();
++            foreach (var item in _settingsStore.ListConfigs())
++            {
++                SavedConfigs.Add(item);
++            }
++
++            if (SavedConfigs.Count == 0)
++            {
++                SelectedConfigName = SettingsStore.DefaultConfigName;
++                return;
++            }
++
++            var active = _settingsStore.ActiveConfigName ?? previous;
++            SelectedConfigName = SavedConfigs.Any(item => item.Name.Equals(active, StringComparison.OrdinalIgnoreCase))
++                ? active!
++                : (SavedConfigs.Any(item => item.Name.Equals(previous, StringComparison.OrdinalIgnoreCase)) ? previous : SavedConfigs[0].Name);
++        }
++
++        /// <summary>把当前配置写入本地文件；report 为真时把结果写进状态栏。</summary>
++        public void PersistSettings(bool report)
++        {
++            _saveTimer?.Stop();
++            var saved = _settingsStore.Save(CaptureSettings());
++
++            if (report)
++            {
++                var configName = _settingsStore.ActiveConfigName ?? SettingsStore.DefaultConfigName;
++                StatusText = saved
++                    ? $"配置已保存：{configName}（{_settingsStore.ActiveFilePath ?? _settingsStore.FilePath ?? "内存"}）"
++                    : "配置已保存到内存（当前目录不可写）";
++            }
++        }
++
++        /// <summary>启动时把上次保存的配置读回界面。</summary>
++        private void LoadSettings()
++        {
++            var settings = _settingsStore.Load();
++            RefreshConfigList();
++            if (settings is null)
++            {
++                StatusText = "未找到历史配置，当前为默认值";
++                return;
++            }
++
++            ApplySettings(settings, string.IsNullOrWhiteSpace(_settingsStore.LoadedFromPath)
+                 ? "已载入上次配置"
+-                : "已载入上次配置：" + _settingsStore.LoadedFromPath;
++                : "已载入上次配置：" + _settingsStore.LoadedFromPath);
++            ConfigName = string.Empty;
+         }
+ 
+         /// <summary>输入停止约 0.8 秒后自动落盘，避免逐字写文件。</summary>
+diff --git a/api-tester-wpf/Views/MainWindow.xaml b/api-tester-wpf/Views/MainWindow.xaml
+index 5baf9c3..e9e53bd 100644
+--- a/api-tester-wpf/Views/MainWindow.xaml
++++ b/api-tester-wpf/Views/MainWindow.xaml
+@@ -208,6 +208,7 @@
+                 <RowDefinition Height="Auto" />
+                 <RowDefinition Height="Auto" />
+                 <RowDefinition Height="Auto" />
++                <RowDefinition Height="Auto" />
+             </Grid.RowDefinitions>
+ 
+             <Border Grid.Row="0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+@@ -219,7 +220,7 @@
+                     <StackPanel Orientation="Vertical">
+                         <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="#F8FAFC" Text="连接设置" />
+                         <TextBlock Margin="0,4,0,0" Foreground="{StaticResource TextMutedBrush}"
+-                                   Text="配置自动保存到可写目录（优先 %APPDATA%\ApiTester，不可写时落到程序目录 config），下次启动自动载入。" />
++                                   Text="支持默认配置与多份具名配置；输入名称可新建，选择后可读取，修改会自动保存。" />
+                     </StackPanel>
+                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                         <Ellipse Width="9" Height="9" Fill="#22C55E" Margin="0,0,8,0" />
+@@ -228,7 +229,49 @@
+                 </Grid>
+             </Border>
+ 
+-            <Border Grid.Row="1" Margin="0,14,0,0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
++            <Border Grid.Row="1" Margin="0,14,0,0" Background="{StaticResource FieldBrush}" BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="14,12">
++                <Grid>
++                    <Grid.ColumnDefinitions>
++                        <ColumnDefinition Width="Auto" />
++                        <ColumnDefinition Width="*" />
++                        <ColumnDefinition Width="Auto" />
++                        <ColumnDefinition Width="Auto" />
++                    </Grid.ColumnDefinitions>
++                    <Grid.RowDefinitions>
++                        <RowDefinition Height="Auto" />
++                        <RowDefinition Height="Auto" />
++                    </Grid.RowDefinitions>
++
++                    <TextBlock Grid.Row="0" Grid.Column="0" Margin="0,0,10,8" VerticalAlignment="Center"
++                               Foreground="{StaticResource TextMutedBrush}" Text="新配置名称" />
++                    <TextBox Grid.Row="0" Grid.Column="1" Margin="0,0,10,8" Height="30" Padding="9,0,9,0"
++                             VerticalContentAlignment="Center" Style="{StaticResource DarkTextBoxStyle}"
++                             ToolTip="输入新配置名称后点击“新建配置”，会保存当前连接与消息设置。"
++                             Text="{Binding ConfigName, UpdateSourceTrigger=PropertyChanged}" />
++                    <Button Grid.Row="0" Grid.Column="2" Margin="0,0,10,8" Height="30" MinWidth="88"
++                            Content="新建配置" Style="{StaticResource DarkButtonBase}"
++                            Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
++                            Command="{Binding NewConfigCommand}" />
++                    <Button Grid.Row="0" Grid.Column="3" Margin="0,0,0,8" Height="30" MinWidth="88"
++                            Content="读取配置" Style="{StaticResource DarkButtonBase}"
++                            Foreground="#BAE6FD" Background="#1B2A42" BorderBrush="{StaticResource FieldBorderBrush}"
++                            Command="{Binding LoadConfigCommand}" />
++
++                    <TextBlock Grid.Row="1" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center"
++                               Foreground="{StaticResource TextMutedBrush}" Text="已保存配置" />
++                    <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,0,10,0"
++                              Style="{StaticResource DarkComboBoxStyle}"
++                              ItemsSource="{Binding SavedConfigs}"
++                              DisplayMemberPath="Name"
++                              SelectedValuePath="Name"
++                              SelectedValue="{Binding SelectedConfigName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
++                              ToolTip="选择配置后点击“读取配置”切换当前连接设置。" />
++                    <TextBlock Grid.Row="1" Grid.Column="3" Margin="10,0,0,0" VerticalAlignment="Center"
++                               Foreground="#64748B" Text="保存按钮会写入当前选中的配置" />
++                </Grid>
++            </Border>
++
++            <Border Grid.Row="2" Margin="0,14,0,0" Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource PanelBorderBrush}" BorderThickness="1" CornerRadius="10" Padding="16">
+                 <Grid>
+                     <Grid.ColumnDefinitions>
+                         <ColumnDefinition Width="1.35*" />
+@@ -340,7 +383,7 @@
+             </Border>
+ 
+             <!-- 消息区与响应区：固定高度 360，内部用 Grid 的 * 行撑开，按钮行永远保留 -->
+-            <Grid Grid.Row="2" Margin="0,14,0,0" Height="360">
++            <Grid Grid.Row="3" Margin="0,14,0,0" Height="360">
+                 <Grid.ColumnDefinitions>
+                     <ColumnDefinition Width="*" />
+                     <ColumnDefinition Width="1.25*" />
+@@ -396,8 +439,8 @@
+                 </Border>
+             </Grid>
+ 
+-            <Border Grid.Row="3" Margin="0,12,0,0" Padding="10,0,0,0">
+-                <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 配置自动保存并可手动“保存配置” · DMSkin 深色主题" />
++            <Border Grid.Row="4" Margin="0,12,0,0" Padding="10,0,0,0">
++                <TextBlock Foreground="#64748B" Text="支持 /models 与 /chat/completions · 支持默认配置与多份具名配置 · DMSkin 深色主题" />
+             </Border>
+         </Grid>
+     </ScrollViewer>

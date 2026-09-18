@@ -113,6 +113,14 @@ namespace ApiTester.Wpf.Views
             }
         }
 
+        private void CopyModelTag_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.FrameworkElement fe && fe.Tag is string model && DataContext is MainViewModel vm)
+            {
+                vm.CopyModelName(model);
+            }
+        }
+
         private void ClearOutputButton_OnClick(object sender, RoutedEventArgs e)
         {
             // 不走 Command，直接调 VM 的公开方法——任何时候都能清空。
@@ -121,5 +129,31 @@ namespace ApiTester.Wpf.Views
                 vm.ClearOutput();
             }
         }
-    }
+
+        private bool _isFiltering;
+        private void ModelComboBox_OnTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (_isFiltering) return;
+            _isFiltering = true;
+            try
+            {
+                if (DataContext is MainViewModel vm && sender is System.Windows.Controls.ComboBox cb)
+                {
+                    var text = cb.Text ?? string.Empty;
+                    vm.FilterModels(text);
+                    // 如果输入内容恰好匹配某个模型，自动选中
+                    var match = vm.Models.FirstOrDefault(m => m.Name.Equals(text, StringComparison.OrdinalIgnoreCase));
+                    if (match != null)
+                    {
+                        vm.SelectedModel = match.Name;
+                    }
+                    else if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        // 允许手动输入不在列表中的模型 ID
+                        vm.SelectedModel = text;
+                    }
+                }
+            }
+            finally { _isFiltering = false; }
+        }    }
 }

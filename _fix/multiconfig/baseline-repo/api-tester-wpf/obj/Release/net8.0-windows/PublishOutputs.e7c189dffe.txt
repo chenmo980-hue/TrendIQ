@@ -1,0 +1,5 @@
+E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\ApiTester.exe
+E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\ApiTester.dll
+E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\ApiTester.deps.json
+E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\ApiTester.runtimeconfig.json
+E:\WorkSpaces\TrendIQ\api-tester-wpf\dist\ApiTester.pdb

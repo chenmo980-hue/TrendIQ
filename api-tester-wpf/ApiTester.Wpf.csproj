@@ -8,6 +8,7 @@
     <AssemblyName>ApiTester</AssemblyName>
     <RootNamespace>ApiTester.Wpf</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\ApiTester.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../TrendIQ/TrendIQ.csproj" Condition="false" />
