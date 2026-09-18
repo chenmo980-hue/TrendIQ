@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Upload,
   Image as ImageIcon,
@@ -22,10 +22,7 @@ export const ImageAnalyzer: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'visual' | 'structured'>('visual');
   const [copied, setCopied] = useState(false);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const readImageFile = (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('请上传有效的图片文件 (PNG, JPG, WEBP)');
       return;
@@ -41,20 +38,29 @@ export const ImageAnalyzer: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) readImageFile(file);
+  };
+
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setMimeType(file.type);
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64 = reader.result as string;
-        setSelectedImage(base64);
-        setAnalysisResult(null);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) readImageFile(file);
   };
+
+  // README 承诺支持直接粘贴行情软件 K 线截图
+  useEffect(() => {
+    const handlePaste = (e: ClipboardEvent) => {
+      const file = e.clipboardData?.files?.[0];
+      if (file) {
+        e.preventDefault();
+        readImageFile(file);
+      }
+    };
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, []);
 
   const triggerAnalyze = async () => {
     if (!selectedImage) return;
@@ -202,7 +208,7 @@ export const ImageAnalyzer: React.FC = () => {
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-medium text-slate-200">
-                  点击上传 或 拖拽 K 线截图到此处
+                  点击上传 / 拖拽 或 Ctrl+V 粘贴 K 线截图到此处
                 </p>
                 <p className="text-xs text-slate-400">
                   支持 JPG, PNG, WEBP 高清截图（最大 20MB）

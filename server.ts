@@ -266,7 +266,18 @@ async function startServer() {
     }
 
     // Consolidated results prioritized by relevance
-    const consolidated = [...sectorResults, ...futuresResults, ...stockResults];
+    // Exact code/name matches win over fuzzy sector constituent matches,
+    // so typing "600519" lands on 贵州茅台 instead of the sector that contains it
+    const isExactMatch = (r: StockSearchResult) =>
+      r.code.toLowerCase() === qLower ||
+      r.name.toLowerCase() === qLower ||
+      (r.pinyin || '').toLowerCase() === qLower;
+
+    const allResults = [...sectorResults, ...futuresResults, ...stockResults];
+    const consolidated = [
+      ...allResults.filter(isExactMatch),
+      ...allResults.filter((r) => !isExactMatch(r)),
+    ];
 
     res.json({
       results: consolidated.slice(0, 20),
@@ -459,6 +470,17 @@ async function startServer() {
 
     // C. Regular A-Share Stock or Market Index
     const norm = normalizeStockCode(rawCode);
+
+    // Only fabricate offline fallback data for assets we can positively identify;
+    // typos / nonsense search terms must produce a clear error instead of a fake quote
+    const knownAsset =
+      !!norm.nameHint ||
+      PRESET_DATABASE.some((p) => p.code === norm.code) ||
+      !!STOCK_PRICE_MAP[`${norm.code}_${norm.market}`] ||
+      !!STOCK_PRICE_MAP[norm.code];
+    if (!/^\d{6}$/.test(norm.code) && !knownAsset) {
+      return res.status(404).json({ error: `未找到标的「${rawCode}」，请检查股票代码、板块或期货名称后重试` });
+    }
 
     let quote: StockQuote | null = null;
     let klineData: KlinePoint[] = [];
@@ -695,6 +717,12 @@ async function startServer() {
       (norm.code === '600519' ? 1348.91 : norm.code === '300750' ? 238.50 : norm.isIndex ? 3350 : 35.8);
 
     const effectivePrice = quote?.price || (klineData.length > 0 ? klineData[klineData.length - 1].close : fallbackBasePrice);
+
+    // No live data and no way to confirm the code exists: fail loudly instead of
+    // presenting a randomly generated price as real market data
+    if (!quote && klineData.length === 0 && !knownAsset) {
+      return res.status(404).json({ error: `未找到「${rawCode}」的行情数据，请检查代码后重试` });
+    }
 
     if (!quote) {
       const chg = Number(((Math.random() - 0.48) * 2.5).toFixed(2));

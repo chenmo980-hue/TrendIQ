@@ -20,7 +20,7 @@ import {
 } from './types';
 import { formatPrice } from '../lib/stockCode';
 import { generateTechnicalJudgment } from '../lib/judgment';
-import { Clock, RotateCcw, Flame, Layers, Compass, Search, TrendingUp, X, ArrowLeft } from 'lucide-react';
+import { Clock, RotateCcw, Flame, Layers, Compass, Search, TrendingUp, TriangleAlert, X, ArrowLeft } from 'lucide-react';
 
 interface FrequentStock {
   code: string;
@@ -216,7 +216,14 @@ export default function App() {
     try {
       const resp = await fetch(`/api/kline?code=${encodeURIComponent(code)}&period=${period}`);
       if (!resp.ok) {
-        throw new Error(`无法获取该标的行情数据 (HTTP ${resp.status})`);
+        let msg = `无法获取该标的行情数据 (HTTP ${resp.status})`;
+        try {
+          const errData = await resp.json();
+          if (errData?.error) msg = errData.error;
+        } catch {
+          // ignore, keep HTTP fallback message
+        }
+        throw new Error(msg);
       }
       const data = await resp.json();
 
@@ -548,14 +555,31 @@ export default function App() {
               )}
             </div>
 
+            {/* Load error banner on top of the main content */}
+            {error && (
+              <div className="flex items-center gap-2.5 bg-red-500/10 border border-red-500/40 rounded-md px-4 py-3 max-w-2xl mx-auto text-left">
+                <TriangleAlert className="w-4 h-4 text-red-400 shrink-0" />
+                <div className="text-sm text-red-300 font-medium">{error}</div>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-red-400/70 hover:text-red-200 p-0.5 ml-2 cursor-pointer"
+                  aria-label="关闭错误提示"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
             {/* Display Either Main Terminal OR Empty Prompt */}
             {!currentCode || (!quote && !isLoading) ? (
-              <div className="py-24 text-center text-slate-500 text-sm font-medium space-y-3">
-                <div className="text-base text-slate-300">请输入股票代码/板块/期货名称开始分析</div>
-                <div className="text-xs text-slate-500">
-                  支持 A股个股（如 600519、002085）、板块题材（低空经济、半导体、固态电池）、期货大宗（螺纹钢、沪铜、黄金、原油、股指期指）
+              error ? null : (
+                <div className="py-24 text-center text-slate-500 text-sm font-medium space-y-3">
+                  <div className="text-base text-slate-300">请输入股票代码/板块/期货名称开始分析</div>
+                  <div className="text-xs text-slate-500">
+                    支持 A股个股（如 600519、002085）、板块题材（低空经济、半导体、固态电池）、期货大宗（螺纹钢、沪铜、黄金、原油、股指期指）
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               /* Two-Column Professional Split Layout */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">

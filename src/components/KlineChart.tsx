@@ -73,6 +73,8 @@ export const KlineChart: React.FC<KlineChartProps> = ({
   // rightOffset > 0 means dragged to the left, viewing historical past candles.
   const [rightOffset, setRightOffset] = useState<number>(-12);
   const [visibleCount, setVisibleCount] = useState(65);
+  // Triggers a redraw when the layout width changes (window/panel resize)
+  const [containerW, setContainerW] = useState(0);
   
   // Dragging state using ref for immediate smooth tracking
   const isDraggingRef = useRef(false);
@@ -143,6 +145,20 @@ export const KlineChart: React.FC<KlineChartProps> = ({
       [periodNum]: !prev[periodNum],
     }));
   };
+
+  // Observe container size so the canvas redraws (and re-clamps DPR) on layout changes
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const width = entry.contentRect.width;
+        if (width > 0) setContainerW(width);
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Draw chart on canvas
   useEffect(() => {
@@ -904,6 +920,7 @@ export const KlineChart: React.FC<KlineChartProps> = ({
     total,
     visibleCount,
     rightOffset,
+    containerW,
     showMA,
     activeMAs,
     showBOLL,
