@@ -24,6 +24,7 @@ namespace ApiTester.Wpf.ViewModels
         }
         public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
         public ModelItem(string name) { Name = name; }
+        public override string ToString() => Name;
     }
 
     public sealed class MainViewModel : ViewModelBase
