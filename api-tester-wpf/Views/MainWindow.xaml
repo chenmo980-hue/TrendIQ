@@ -141,6 +141,51 @@
             </Setter>
         </Style>
 
+        <Style x:Key="DarkEditableComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBoxStyle}">
+            <Setter Property="IsEditable" Value="True" />
+            <Setter Property="IsTextSearchEnabled" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton Focusable="False" ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="ToggleBorder" Background="{StaticResource FieldBrush}"
+                                                BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="6">
+                                            <Path HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,12,0"
+                                                  Data="M 0 0 L 4 4 L 8 0 Z" Fill="#8FA3BF" />
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+                            <TextBox x:Name="PART_EditableTextBox" Margin="12,0,34,0" VerticalAlignment="Center"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                     CaretBrush="{StaticResource AccentBrush}"
+                                     VerticalContentAlignment="Center" />
+                            <Popup x:Name="PART_Popup" AllowsTransparency="True" Placement="Bottom" Focusable="False"
+                                   PopupAnimation="Slide" IsOpen="{TemplateBinding IsDropDownOpen}">
+                                <Border MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                        Margin="0,4,0,0" Padding="4" Background="#0F1B2D"
+                                        BorderBrush="{StaticResource FieldBorderBrush}" BorderThickness="1" CornerRadius="8">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="DarkButtonBase" TargetType="Button">
             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
             <Setter Property="Background" Value="#1B2A42" />
@@ -326,12 +371,11 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <ComboBox x:Name="ModelComboBox" Grid.Column="0" Style="{StaticResource DarkComboBoxStyle}"
+                            <ComboBox x:Name="ModelComboBox" Grid.Column="0" Style="{StaticResource DarkEditableComboBoxStyle}"
                                       IsEditable="True" IsTextSearchEnabled="False"
-                                      ItemsSource="{Binding FilteredModels}"
+                                      ItemsSource="{Binding Models}"
                                       DisplayMemberPath="Name"
-                                      SelectedValuePath="Name"
-                                      SelectedValue="{Binding SelectedModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      Text="{Binding SelectedModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                       TextBoxBase.TextChanged="ModelComboBox_OnTextChanged" />
                             <Button Grid.Column="1" Margin="8,0,0,0" Height="34" MinWidth="56" Content="复制"
                                     Style="{StaticResource DarkButtonBase}"

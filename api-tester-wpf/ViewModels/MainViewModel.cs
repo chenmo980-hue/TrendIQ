@@ -29,18 +29,58 @@ namespace ApiTester.Wpf.ViewModels
 
     public sealed class MainViewModel : ViewModelBase
     {
-        // 默认走直连：环境里 https_proxy 配错时，CONNECT 隧道后的 schannel 握手会拿不到客户端凭据
-        // （SEC_E_NO_CREDENTIALS 0x8009030E），把整套 HTTPS 请求都拖死。如果以后真的要代理，
-        // 改成读配置 BaseUrl 同目录下的 proxy.txt，不要走系统代理继承。
-        private readonly HttpClient _httpClient = new HttpClient(new SocketsHttpHandler
+        // 直连/代理二选一：程序目录下有 proxy.txt 时按里面的地址走代理（例如 http://127.0.0.1:7897），
+        // 文件不存在或内容为空则直连。不继承系统代理，避免 https_proxy 配错时 CONNECT 隧道后
+        // schannel 握手拿不到客户端凭据（SEC_E_NO_CREDENTIALS）把整套 HTTPS 拖死。
+        private static readonly string ProxyFilePath =
+            System.IO.Path.Combine(AppContext.BaseDirectory, "proxy.txt");
+
+        private static SocketsHttpHandler CreateHandler()
         {
-            UseProxy = false,
-            UseCookies = false,
-            AllowAutoRedirect = true,
-        })
+            var handler = new SocketsHttpHandler
+            {
+                UseCookies = false,
+                AllowAutoRedirect = true,
+                ConnectTimeout = TimeSpan.FromSeconds(15),
+            };
+            try
+            {
+                if (System.IO.File.Exists(ProxyFilePath))
+                {
+                    var raw = System.IO.File.ReadAllText(ProxyFilePath).Trim();
+                    if (!string.IsNullOrWhiteSpace(raw) &&
+                        Uri.TryCreate(raw, UriKind.Absolute, out var proxyUri))
+                    {
+                        handler.Proxy = new System.Net.WebProxy(proxyUri);
+                        handler.UseProxy = true;
+                    }
+                }
+            }
+            catch
+            {
+                // 读不到 proxy.txt 就按直连处理，不能让配置问题阻塞启动。
+            }
+            return handler;
+        }
+
+        // 关键：Cloudflare 会把只带 .NET 默认 UA 的请求判成异常流量直接 403（返回一串 HTML 拦截页，
+        // 界面表现成"拉取失败 HTTP 403"）。这里补一套浏览器级请求头，让 WAF 按正常客户端放行。
+        private readonly HttpClient _httpClient = CreateHttpClient();
+
+        private static HttpClient CreateHttpClient()
         {
-            Timeout = TimeSpan.FromSeconds(30)
-        };
+            var client = new HttpClient(CreateHandler())
+            {
+                Timeout = TimeSpan.FromSeconds(60)
+            };
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-Control", "no-cache");
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Pragma", "no-cache");
+            return client;
+        }
         private readonly SettingsStore _settingsStore = new();
         private DispatcherTimer? _saveTimer;
         private bool _isLoadingSettings;
@@ -244,7 +284,8 @@ namespace ApiTester.Wpf.ViewModels
         {
             var request = new HttpRequestMessage(method, Url(path)) { Content = content };
             request.Headers.Add("Authorization", "Bearer " + ApiKey.Trim());
-            request.Headers.Add("Accept", "application/json");
+            // Accept / UA / Accept-Language 已在 HttpClient.DefaultRequestHeaders 统一设置，
+            // 这里再加一次同名头会抛 InvalidOperationException，故不再重复添加。
             return request;
         }
 

@@ -130,30 +130,54 @@ namespace ApiTester.Wpf.Views
             }
         }
 
-        private bool _isFiltering;
-        private void ModelComboBox_OnTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        // 下拉框可编辑：过滤走 ComboBox 自己的默认 CollectionView（只设 Filter + Refresh），
+// 不重建 ItemsSource 集合。清空/重建集合会让可编辑 ComboBox 重算选中项并回写 Text，
+// 再次触发 TextChanged，形成绑定回环把 UI 线程卡死——用 CollectionView 从根上避免。
+private bool _filterHooked;
+private string _filterKeyword = string.Empty;
+private bool _refreshing;
+
+private void ModelComboBox_OnTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+{
+    if (!(DataContext is MainViewModel vm) || !(sender is System.Windows.Controls.ComboBox cb)) { return; }
+    if (!_filterHooked)
+    {
+        var view = System.Windows.Data.CollectionViewSource.GetDefaultView(vm.Models);
+        view.Filter = o => MatchesFilter(o as ModelItem);
+        _filterHooked = true;
+    }
+    if (_refreshing) { return; }
+
+    var text = cb.Text ?? string.Empty;
+    if (string.IsNullOrWhiteSpace(text) || vm.Models.Any(m => m.Name.Equals(text.Trim(), StringComparison.OrdinalIgnoreCase)))
+    {
+        _filterKeyword = string.Empty;   // 空输入或已选中完整模型名 -> 显示全部
+    }
+    else
+    {
+        _filterKeyword = text.Trim();    // 正在输入关键字 -> 模糊过滤
+    }
+
+    // 延到本轮回合结束后再刷新视图，避免在 TextChanged 处理中改动 ItemsSource
+    _refreshing = true;
+    Dispatcher.BeginInvoke(new Action(() =>
+    {
+        try
         {
-            if (_isFiltering) return;
-            _isFiltering = true;
-            try
-            {
-                if (DataContext is MainViewModel vm && sender is System.Windows.Controls.ComboBox cb)
-                {
-                    var text = cb.Text ?? string.Empty;
-                    vm.FilterModels(text);
-                    // 如果输入内容恰好匹配某个模型，自动选中
-                    var match = vm.Models.FirstOrDefault(m => m.Name.Equals(text, StringComparison.OrdinalIgnoreCase));
-                    if (match != null)
-                    {
-                        vm.SelectedModel = match.Name;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(text))
-                    {
-                        // 允许手动输入不在列表中的模型 ID
-                        vm.SelectedModel = text;
-                    }
-                }
-            }
-            finally { _isFiltering = false; }
-        }    }
+            System.Windows.Data.CollectionViewSource.GetDefaultView(vm.Models).Refresh();
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }), System.Windows.Threading.DispatcherPriority.Background);
+}
+
+private bool MatchesFilter(ModelItem item)
+{
+    if (item == null) { return false; }
+    if (string.IsNullOrEmpty(_filterKeyword)) { return true; }
+    return item.Name.IndexOf(_filterKeyword, StringComparison.OrdinalIgnoreCase) >= 0;
+}
+    }
 }
